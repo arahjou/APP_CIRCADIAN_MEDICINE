@@ -1,9 +1,3 @@
-Of course! This is a fantastic project, and breaking it down into a clear architecture is the perfect next step.
-
-Here is a step-by-step guide on how you would structure this Streamlit application, explaining the role of each component, including the custom tools and the agent you'll need to create.
-
-***
-
 ### High-Level Overview
 
 Your application will have three main layers:
