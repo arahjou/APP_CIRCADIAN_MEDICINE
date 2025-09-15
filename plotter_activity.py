@@ -1,4 +1,4 @@
-def plotter(df_subset):
+def plotter_activity(df_subset):
     import matplotlib.pyplot as plt
     import pandas as pd
 
