@@ -2,6 +2,7 @@ import streamlit as st
 from upload_file import upload_file
 from plotter_activity import plotter_activity
 from plotter_light import plotter_light
+from analyze_sleep_light_exposure import analyze_sleep_light_exposure
 
 def main():
     image = 'image/Circadian Medicine.png'
@@ -15,6 +16,31 @@ def main():
             fig_light = plotter_light(data)
             st.pyplot(fig_activity)
             st.pyplot(fig_light)
+            
+            # Get analysis results
+            results = analyze_sleep_light_exposure(data)
+            
+            # Display results in a nicely formatted way
+            st.subheader("Sleep and Light Exposure Analysis")
+            
+            st.write("**Metric 1: Minutes of light exposure (MELANOPIC EDI > 1 lux) during sleep by date:**")
+            if isinstance(results['metric1'], str):
+                st.write(results['metric1'])
+            else:
+                st.dataframe(results['metric1'])
+            
+            st.write("**Metric 2: Minutes of bright light (MELANOPIC EDI > 10 lux) in the 3 hours before sleep by date:**")
+            if isinstance(results['metric2'], str):
+                st.write(results['metric2'])
+            else:
+                st.dataframe(results['metric2'])
+            
+            st.write("**Metric 3: Minutes of non-bright light (MELANOPIC EDI < 250 lux) in the 3 hours after waking up by date:**")
+            if isinstance(results['metric3'], str):
+                st.write(results['metric3'])
+            else:
+                st.dataframe(results['metric3'])
+
         else:
             st.write("No data to display.")
 
