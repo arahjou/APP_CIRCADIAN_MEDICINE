@@ -4,6 +4,7 @@ from plotter_activity import plotter_activity
 from plotter_light import plotter_light
 from analyze_sleep_light_exposure import analyze_sleep_light_exposure
 from sleep_on_off_mid import analyze_sleep_periods
+from CPD_mid_sleep_empty import build_centered_midpoint_hours, calculate_single_person_cpd
 
 def main():
     image = 'image/Circadian Medicine.png'
@@ -47,7 +48,14 @@ def main():
                 st.write(results)
             else:
                 st.dataframe(results)
-
+            # Calculate CPD
+            try:
+                mid_sleep_data = build_centered_midpoint_hours(results)
+                cpd_results = calculate_single_person_cpd(mid_sleep_data, date_col="mid_sleep_DATE", midpoint_col="midpoint_hours_centered")
+                st.write("**Circadian Phase Dispersion (CPD) Analysis:**")
+                st.dataframe(cpd_results[['mid_sleep_DATE', 'Mid_sleep_Time', 'cpd_hours', 'mean_midpoint_hours', 'median_midpoint_hours']])
+            except Exception as e:
+                st.write(f"Error calculating CPD: {e}")
         else:
             st.write("No data to display.")
 
