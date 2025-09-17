@@ -3,6 +3,7 @@ from upload_file import upload_file
 from plotter_activity import plotter_activity
 from plotter_light import plotter_light
 from analyze_sleep_light_exposure import analyze_sleep_light_exposure
+from sleep_on_off_mid import analyze_sleep_periods
 
 def main():
     image = 'image/Circadian Medicine.png'
@@ -40,6 +41,12 @@ def main():
                 st.write(results['metric3'])
             else:
                 st.dataframe(results['metric3'])
+            results = analyze_sleep_periods(data)
+            st.write("**Sleep Periods Analysis:**")
+            if isinstance(results, str):
+                st.write(results)
+            else:
+                st.dataframe(results)
 
         else:
             st.write("No data to display.")
