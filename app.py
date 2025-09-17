@@ -4,7 +4,7 @@ from plotter_activity import plotter_activity
 from plotter_light import plotter_light
 from analyze_sleep_light_exposure import analyze_sleep_light_exposure
 from sleep_on_off_mid import analyze_sleep_periods
-from CPD_mid_sleep_empty import build_centered_midpoint_hours, calculate_single_person_cpd
+from CPD_mid_sleep import build_centered_midpoint_hours, calculate_single_person_cpd
 
 def main():
     image = 'image/Circadian Medicine.png'
