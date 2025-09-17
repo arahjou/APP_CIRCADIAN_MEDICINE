@@ -16,18 +16,27 @@ def upload_file(upload_file):
         # show just to 2 decimal time
         df['HOUR'] = df['HOUR'].round(2)
 
-
         # Or if DATE is string, convert column
         df['DATE'] = df['DATE'].astype(str)
-        # This need to be changed based on the date of the file
-        df_subset = df[df['DATE'].isin(['2024-01-16', '2024-01-17', '2024-01-18'])]
-
-
-        df_subset = df_subset[['DATE/TIME', 'TEMPERATURE', 'PIMn', 'TATn', 'ZCMn', 
+        
+        # Return the full dataset instead of filtering by specific dates
+        df_processed = df[['DATE/TIME', 'TEMPERATURE', 'PIMn', 'TATn', 'ZCMn', 
                        'MELANOPIC EDI', 'DATE', 'TIME', 'HOUR']].copy()
 
         # Convert to timezone-naive before creating Period to avoid warning
-        df_subset['Transition'] = df_subset['DATE/TIME'].dt.tz_convert(None).dt.to_period('D').dt.start_time
-        return df_subset
+        df_processed['Transition'] = df_processed['DATE/TIME'].dt.tz_convert(None).dt.to_period('D').dt.start_time
+        return df_processed
     else:
         return None
+
+def get_available_dates(df):
+    """Get unique dates available in the dataframe"""
+    if df is not None and 'DATE' in df.columns:
+        return sorted(df['DATE'].unique().tolist())
+    return []
+
+def filter_data_by_dates(df, selected_dates):
+    """Filter dataframe by selected dates"""
+    if df is not None and selected_dates:
+        return df[df['DATE'].isin(selected_dates)]
+    return df
