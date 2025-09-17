@@ -5,6 +5,7 @@ from plotter_light import plotter_light
 from analyze_sleep_light_exposure import analyze_sleep_light_exposure
 from sleep_on_off_mid import analyze_sleep_periods
 from CPD_mid_sleep import build_centered_midpoint_hours, calculate_single_person_cpd
+from SRI import calculate_sri_from_pimn
 
 def main():
     image = 'image/Circadian Medicine.png'
@@ -85,6 +86,26 @@ def main():
                         st.dataframe(cpd_results[['mid_sleep_DATE', 'Mid_sleep_Time', 'cpd_hours', 'mean_midpoint_hours', 'median_midpoint_hours']])
                     except Exception as e:
                         st.write(f"Error calculating CPD: {e}")
+                    
+                    # Calculate SRI
+                    try:
+                        sri_results = calculate_sri_from_pimn(
+                            filtered_data,  # Use filtered_data instead of data
+                            timestamp_col='DATE/TIME',
+                            pimn_col='PIMn',
+                            window_days=2,
+                            slide_interval=1,
+                            rolling_window=100,
+                            sleep_threshold=6,
+                            local_tz="Europe/Berlin"
+                        )
+                        st.write("**Sleep Regularity Index (SRI) Analysis:**")
+                        if len(sri_results) > 0:
+                            st.dataframe(sri_results)
+                        else:
+                            st.write("No SRI results available - insufficient data for analysis (need at least 2 days).")
+                    except Exception as e:
+                        st.write(f"Error calculating SRI: {e}")
                 elif selected_dates and not submit_button:
                     st.info("Click 'Run Analysis' to start the analysis with your selected dates.")
                 elif not selected_dates:
