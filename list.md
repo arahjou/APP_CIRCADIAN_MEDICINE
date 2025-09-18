@@ -12,6 +12,8 @@
 
 ## Adding possiblity to comparing between two or more time points
 
+## Adding possibility to select free days vs. work days.
+
 ## Data import $ cleaning
 
 ## Metrics calculation
