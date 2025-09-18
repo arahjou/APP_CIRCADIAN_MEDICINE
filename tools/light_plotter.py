@@ -1,4 +1,4 @@
-def plotter_light(df_subset):
+def light_plotter(df_subset):
     import matplotlib.pyplot as plt
     import numpy as np
 

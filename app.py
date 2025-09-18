@@ -1,7 +1,7 @@
 import streamlit as st
 from tools.upload_file import upload_file, get_available_dates, filter_data_by_dates
-from tools.plotter_activity import plotter_activity
-from tools.plotter_light import plotter_light
+from tools.activity_plotter import activity_plotter
+from tools.light_plotter import light_plotter
 from tools.analyze_sleep_light_exposure import analyze_sleep_light_exposure
 from tools.sleep_on_off_mid import analyze_sleep_periods
 from tools.CPD_mid_sleep import build_centered_midpoint_hours, calculate_single_person_cpd
@@ -41,8 +41,8 @@ def main():
                     st.subheader(f"Analysis for {len(selected_dates)} selected date(s)")
                     
                     # Generate plots and analysis for filtered data
-                    fig_activity = plotter_activity(filtered_data)
-                    fig_light = plotter_light(filtered_data)
+                    fig_activity = activity_plotter(filtered_data)
+                    fig_light = light_plotter(filtered_data)
                     st.pyplot(fig_activity)
                     st.pyplot(fig_light)
                     
