@@ -1,11 +1,11 @@
 import streamlit as st
-from upload_file import upload_file, get_available_dates, filter_data_by_dates
-from plotter_activity import plotter_activity
-from plotter_light import plotter_light
-from analyze_sleep_light_exposure import analyze_sleep_light_exposure
-from sleep_on_off_mid import analyze_sleep_periods
-from CPD_mid_sleep import build_centered_midpoint_hours, calculate_single_person_cpd
-from SRI import calculate_sri_from_pimn
+from tools.upload_file import upload_file, get_available_dates, filter_data_by_dates
+from tools.plotter_activity import plotter_activity
+from tools.plotter_light import plotter_light
+from tools.analyze_sleep_light_exposure import analyze_sleep_light_exposure
+from tools.sleep_on_off_mid import analyze_sleep_periods
+from tools.CPD_mid_sleep import build_centered_midpoint_hours, calculate_single_person_cpd
+from tools.SRI import calculate_sri_from_pimn
 
 def main():
     image = 'image/Circadian Medicine.png'
@@ -69,10 +69,11 @@ def main():
                         st.write(results['metric3'])
                     else:
                         st.dataframe(results['metric3'])
-                    
+
+                    st.subheader("Derived metrics - sleep periods, CPD of mid sleep, SRI")
                     # Sleep periods analysis
                     sleep_results = analyze_sleep_periods(filtered_data)
-                    st.write("**Sleep Periods Analysis:**")
+                    st.write("**Sleep Periods Analysis: plus sleep onset and offset**")
                     if isinstance(sleep_results, str):
                         st.write(sleep_results)
                     else:
@@ -106,6 +107,9 @@ def main():
                             st.write("No SRI results available - insufficient data for analysis (need at least 2 days).")
                     except Exception as e:
                         st.write(f"Error calculating SRI: {e}")
+
+                    st.subheader("Activity derived metrics: L5, M10, RA, IS, IV, Cosinor fit")
+
                 elif selected_dates and not submit_button:
                     st.info("Click 'Run Analysis' to start the analysis with your selected dates.")
                 elif not selected_dates:
