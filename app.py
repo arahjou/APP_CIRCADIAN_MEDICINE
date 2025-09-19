@@ -10,6 +10,8 @@ from tools.sleep_SRI import calculate_sri_from_pimn
 from tools.activity_plotter import activity_plotter
 from tools.activity_IS_IV import compute_rolling_2day_is_iv_activity
 from tools.activity_L5_M10_RA import compute_daily_L5_M10_RA_activity
+from tools.activity_cosinor import fit_cosinor_daily_activity
+
 # light
 from tools.light_plotter import light_plotter
 def main():
@@ -144,6 +146,21 @@ def main():
                             st.write("No L5/M10/RA results available - insufficient data for analysis.")
                     except Exception as e:
                         st.write(f"Error calculating L5/M10/RA: {e}")
+                    # Cosinor fit analysis and CPD of activity acrophase
+                    st.write("**Cosinor Fit Analysis:**")
+                    try:
+                        cosinor_results = fit_cosinor_daily_activity(
+                            filtered_data,
+                            datetime_col='DATE/TIME',
+                            value_col='PIMn'
+                        )
+                        st.write("**Daily Cosinor Fit Analysis:**")
+                        if len(cosinor_results) > 0:
+                            st.dataframe(cosinor_results)
+                        else:
+                            st.write("No Cosinor fit results available - insufficient data for analysis.")
+                    except Exception as e:
+                        st.write(f"Error calculating Cosinor fit: {e}")
 
                 elif selected_dates and not submit_button:
                     st.info("Click 'Run Analysis' to start the analysis with your selected dates.")
