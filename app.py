@@ -6,6 +6,8 @@ from tools.analyze_sleep_light_exposure import analyze_sleep_light_exposure
 from tools.sleep_on_off_mid import analyze_sleep_periods
 from tools.CPD_mid_sleep import build_centered_midpoint_hours, calculate_single_person_cpd
 from tools.SRI import calculate_sri_from_pimn
+from tools.activity_IS_IV import compute_rolling_2day_is_iv_activity
+from tools.activity_L5_M10_RA import compute_daily_L5_M10_RA_activity
 
 def main():
     image = 'image/Circadian Medicine.png'
@@ -109,6 +111,36 @@ def main():
                         st.write(f"Error calculating SRI: {e}")
 
                     st.subheader("Activity derived metrics: L5, M10, RA, IS, IV, Cosinor fit")
+                    # Calculate rolling 2-day IS and IV
+                    try:
+                        is_iv_results = compute_rolling_2day_is_iv_activity(
+                            filtered_data,
+                            time_col="DATE/TIME",
+                            value_col="PIMn",
+                            anchor_hour=12
+                        )
+                        st.write("**Rolling 2-Day Interdaily Stability (IS) and Intradaily Variability (IV) Analysis:**")
+                        if len(is_iv_results) > 0:
+                            st.dataframe(is_iv_results)
+                        else:
+                            st.write("No IS/IV results available - insufficient data for analysis (need at least 2 days).")
+                    except Exception as e:
+                        st.write(f"Error calculating IS/IV: {e}")
+                    # Note: L5, M10, RA calculations can be added similarly if needed
+                    try:
+                        l5_m10_ra_results = compute_daily_L5_M10_RA_activity(
+                            filtered_data,
+                            time_col="DATE/TIME",
+                            value_col="PIMn",
+                            anchor_hour=12
+                        )
+                        st.write("**Daily L5, M10, and Relative Amplitude (RA) Analysis:**")
+                        if len(l5_m10_ra_results) > 0:
+                            st.dataframe(l5_m10_ra_results)
+                        else:
+                            st.write("No L5/M10/RA results available - insufficient data for analysis.")
+                    except Exception as e:
+                        st.write(f"Error calculating L5/M10/RA: {e}")
 
                 elif selected_dates and not submit_button:
                     st.info("Click 'Run Analysis' to start the analysis with your selected dates.")
