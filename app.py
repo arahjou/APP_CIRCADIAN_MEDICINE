@@ -15,6 +15,10 @@ from tools.activity_CPD import calculate_cpd_activity
 
 # light
 from tools.light_plotter import light_plotter
+from tools.light_IS_IV import compute_rolling_2day_is_iv_light
+from tools.light_L5_M10_RA_empty import compute_daily_L5_M10_RA_light
+from tools.light_cosinor import fit_cosinor_daily_activity as fit_cosinor_daily_light
+from tools.light_CPD import calculate_cpd_light
 def main():
     image = 'image/Circadian Medicine.png'
     st.image(image, width='stretch')
@@ -177,12 +181,69 @@ def main():
                     except Exception as e:
                         st.write(f"Error calculating CPD of activity acrophase: {e}")
                     # light analysis
-                    st.subheader("Light derived metrics")
-                    # IS & IV
-                    # L5 & M10 & RA
-                    # Cosinor fit
+                    st.subheader("Light derived metrics: L5, M10, RA, IS, IV, Cosinor fit")
+                    
+                    # IS & IV for light
+                    try:
+                        light_is_iv_results = compute_rolling_2day_is_iv_light(
+                            filtered_data,
+                            time_col="DATE/TIME",
+                            value_col="MELANOPIC EDI",
+                            anchor_hour=12
+                        )
+                        st.write("**Rolling 2-Day Interdaily Stability (IS) and Intradaily Variability (IV) for Light:**")
+                        if len(light_is_iv_results) > 0:
+                            st.dataframe(light_is_iv_results)
+                        else:
+                            st.write("No light IS/IV results available - insufficient data for analysis (need at least 2 days).")
+                    except Exception as e:
+                        st.write(f"Error calculating light IS/IV: {e}")
+                    
+                    # L5 & M10 & RA for light
+                    try:
+                        light_l5_m10_ra_results = compute_daily_L5_M10_RA_light(
+                            filtered_data,
+                            time_col="DATE/TIME",
+                            value_col="MELANOPIC EDI",
+                            anchor_hour=12
+                        )
+                        st.write("**Daily L5, M10, and Relative Amplitude (RA) for Light:**")
+                        if len(light_l5_m10_ra_results) > 0:
+                            st.dataframe(light_l5_m10_ra_results)
+                        else:
+                            st.write("No light L5/M10/RA results available - insufficient data for analysis.")
+                    except Exception as e:
+                        st.write(f"Error calculating light L5/M10/RA: {e}")
+                    
+                    # Cosinor fit for light
+                    try:
+                        light_cosinor_results = fit_cosinor_daily_light(
+                            filtered_data,
+                            datetime_col='DATE/TIME',
+                            value_col='MELANOPIC EDI'
+                        )
+                        st.write("**Daily Cosinor Fit Analysis for Light:**")
+                        if len(light_cosinor_results) > 0:
+                            st.dataframe(light_cosinor_results)
+                        else:
+                            st.write("No light Cosinor fit results available - insufficient data for analysis.")
+                    except Exception as e:
+                        st.write(f"Error calculating light Cosinor fit: {e}")
+                    
                     # CPD of light acrophase
-                    # (Implement similar to activity if needed)
+                    try:
+                        cpd_light_acrophase_results = calculate_cpd_light(
+                            light_cosinor_results,
+                            ms_col="acrophase_hours",
+                            date_col="date"
+                        )
+                        st.write("**Composite Phase Deviation (CPD) of Light Acrophase Analysis:**")
+                        if len(cpd_light_acrophase_results) > 0:
+                            st.dataframe(cpd_light_acrophase_results[['date', 'cpd_hours', 'deviation_from_mean_hours', 'deviation_from_prev_hours']])
+                        else:
+                            st.write("No CPD light results available - insufficient data for analysis.")
+                    except Exception as e:
+                        st.write(f"Error calculating CPD of light acrophase: {e}")
 # End of analysis block
                 elif selected_dates and not submit_button:
                     st.info("Click 'Run Analysis' to start the analysis with your selected dates.")
