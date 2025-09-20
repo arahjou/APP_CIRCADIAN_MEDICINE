@@ -176,6 +176,13 @@ def main():
                             st.write("No CPD activity results available - insufficient data for analysis.")
                     except Exception as e:
                         st.write(f"Error calculating CPD of activity acrophase: {e}")
+                    # light analysis
+                    st.subheader("Light derived metrics")
+                    # IS & IV
+                    # L5 & M10 & RA
+                    # Cosinor fit
+                    # CPD of light acrophase
+                    # (Implement similar to activity if needed)
 # End of analysis block
                 elif selected_dates and not submit_button:
                     st.info("Click 'Run Analysis' to start the analysis with your selected dates.")
