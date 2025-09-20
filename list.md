@@ -203,3 +203,153 @@ If you want, I can generate **ready-to-run code** (R or Python) that:
 #### Plotting single items with boundaries for simplification form excellent to very bad
 
 #### Add radar chart to show all results in one figure
+
+---
+
+# Variable Dictionary for Database Storage
+
+This dictionary maps all variables computed in the application to their source functions and metrics for future database storage implementation.
+
+## Core Data Variables
+| Variable Name | Source Function | Data Type | Description | Signal Type |
+|---------------|----------------|-----------|-------------|-------------|
+| `df` | File uploader | DataFrame | Raw uploaded data file | Input |
+| `data` | `upload_file()` | DataFrame | Processed uploaded data | Input |
+| `available_dates` | `get_available_dates()` | List[str] | List of available dates in data | Metadata |
+| `selected_dates` | User selection | List[str] | User-selected dates for analysis | Metadata |
+| `filtered_data` | `filter_data_by_dates()` | DataFrame | Data filtered by selected dates | Input |
+
+## Visualization Variables
+| Variable Name | Source Function | Data Type | Description | Signal Type |
+|---------------|----------------|-----------|-------------|-------------|
+| `fig_activity` | `activity_plotter()` | matplotlib.Figure | Activity plot visualization | Activity |
+| `fig_light` | `light_plotter()` | matplotlib.Figure | Light exposure plot visualization | Light |
+
+## Sleep and Light Exposure Metrics
+| Variable Name | Source Function | Data Type | Description | Metric Type |
+|---------------|----------------|-----------|-------------|-------------|
+| `sleep_light_exposure_results` | `analyze_sleep_light_exposure()` | Dict | Sleep-light exposure analysis results | Sleep/Light |
+| `sleep_light_exposure_results['metric1']` | `analyze_sleep_light_exposure()` | DataFrame/str | Minutes of light exposure (>1 lux) during sleep | Sleep/Light |
+| `sleep_light_exposure_results['metric2']` | `analyze_sleep_light_exposure()` | DataFrame/str | Minutes of bright light (>10 lux) 3h before sleep | Sleep/Light |
+| `sleep_light_exposure_results['metric3']` | `analyze_sleep_light_exposure()` | DataFrame/str | Minutes of non-bright light (<250 lux) 3h after wake | Sleep/Light |
+
+## Sleep Analysis Variables
+| Variable Name | Source Function | Data Type | Description | Metric Type |
+|---------------|----------------|-----------|-------------|-------------|
+| `sleep_periods_results` | `analyze_sleep_periods()` | DataFrame/str | Sleep onset, offset, and period analysis | Sleep |
+| `mid_sleep_data` | `build_centered_midpoint_hours()` | DataFrame | Processed mid-sleep data with centered hours | Sleep |
+| `cpd_mid_sleep_results` | `calculate_single_person_cpd()` | DataFrame | Circadian Phase Dispersion of mid-sleep | CPD |
+| `sri_sleep_results` | `calculate_sri_from_pimn()` | DataFrame | Sleep Regularity Index analysis | SRI |
+
+## Activity Analysis Variables
+| Variable Name | Source Function | Data Type | Description | Metric Type |
+|---------------|----------------|-----------|-------------|-------------|
+| `activity_is_iv_results` | `compute_rolling_2day_is_iv_activity()` | DataFrame | Interdaily Stability (IS) and Intradaily Variability (IV) | IS/IV |
+| `activity_l5_m10_ra_results` | `compute_daily_L5_M10_RA_activity()` | DataFrame | L5, M10, and Relative Amplitude analysis | L5/M10/RA |
+| `activity_cosinor_results` | `fit_cosinor_daily_activity()` | DataFrame | Daily cosinor fit analysis for activity | Cosinor |
+| `cpd_activity_acrophase_results` | `calculate_cpd_activity()` | DataFrame | Composite Phase Deviation of activity acrophase | CPD |
+
+## Database Storage Schema Suggestion
+
+### Primary Tables Structure:
+```sql
+-- Main analysis session table
+CREATE TABLE analysis_sessions (
+    session_id SERIAL PRIMARY KEY,
+    upload_filename VARCHAR(255),
+    selected_dates TEXT[], -- Array of selected dates
+    analysis_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Sleep and light exposure metrics
+CREATE TABLE sleep_light_metrics (
+    id SERIAL PRIMARY KEY,
+    session_id INTEGER REFERENCES analysis_sessions(session_id),
+    date DATE,
+    light_during_sleep_minutes FLOAT, -- metric1
+    bright_light_before_sleep_minutes FLOAT, -- metric2
+    dim_light_after_wake_minutes FLOAT -- metric3
+);
+
+-- Sleep periods and timing
+CREATE TABLE sleep_periods (
+    id SERIAL PRIMARY KEY,
+    session_id INTEGER REFERENCES analysis_sessions(session_id),
+    date DATE,
+    sleep_onset TIME,
+    sleep_offset TIME,
+    mid_sleep_time TIME,
+    sleep_duration_hours FLOAT
+);
+
+-- CPD mid-sleep results
+CREATE TABLE cpd_mid_sleep (
+    id SERIAL PRIMARY KEY,
+    session_id INTEGER REFERENCES analysis_sessions(session_id),
+    date DATE,
+    cpd_hours FLOAT,
+    mean_midpoint_hours FLOAT,
+    median_midpoint_hours FLOAT
+);
+
+-- SRI results
+CREATE TABLE sri_results (
+    id SERIAL PRIMARY KEY,
+    session_id INTEGER REFERENCES analysis_sessions(session_id),
+    date DATE,
+    sri_value FLOAT,
+    window_days INTEGER
+);
+
+-- Activity IS/IV metrics
+CREATE TABLE activity_is_iv (
+    id SERIAL PRIMARY KEY,
+    session_id INTEGER REFERENCES analysis_sessions(session_id),
+    date DATE,
+    interdaily_stability FLOAT, -- IS
+    intradaily_variability FLOAT -- IV
+);
+
+-- Activity L5/M10/RA metrics
+CREATE TABLE activity_l5_m10_ra (
+    id SERIAL PRIMARY KEY,
+    session_id INTEGER REFERENCES analysis_sessions(session_id),
+    date DATE,
+    l5_onset_time TIME,
+    l5_value FLOAT,
+    m10_midpoint_time TIME,
+    m10_value FLOAT,
+    relative_amplitude FLOAT -- RA
+);
+
+-- Activity cosinor results
+CREATE TABLE activity_cosinor (
+    id SERIAL PRIMARY KEY,
+    session_id INTEGER REFERENCES analysis_sessions(session_id),
+    date DATE,
+    mesor FLOAT,
+    amplitude FLOAT,
+    acrophase_hours FLOAT,
+    r_squared FLOAT
+);
+
+-- CPD activity acrophase
+CREATE TABLE cpd_activity_acrophase (
+    id SERIAL PRIMARY KEY,
+    session_id INTEGER REFERENCES analysis_sessions(session_id),
+    date DATE,
+    cpd_hours FLOAT,
+    deviation_from_mean_hours FLOAT,
+    deviation_from_prev_hours FLOAT
+);
+```
+
+### Variable-to-Database Mapping:
+- `sleep_light_exposure_results` → `sleep_light_metrics` table
+- `sleep_periods_results` → `sleep_periods` table  
+- `cpd_mid_sleep_results` → `cpd_mid_sleep` table
+- `sri_sleep_results` → `sri_results` table
+- `activity_is_iv_results` → `activity_is_iv` table
+- `activity_l5_m10_ra_results` → `activity_l5_m10_ra` table
+- `activity_cosinor_results` → `activity_cosinor` table
+- `cpd_activity_acrophase_results` → `cpd_activity_acrophase` table

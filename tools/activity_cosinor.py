@@ -19,11 +19,14 @@ def fit_cosinor_daily_activity(df, datetime_col='DATE/TIME', value_col='PIMn'):
     """
     results = []
     
+    # Create a copy to avoid SettingWithCopyWarning
+    df_copy = df.copy()
+    
     # Ensure the datetime column is in the correct format
-    df[datetime_col] = pd.to_datetime(df[datetime_col])
+    df_copy[datetime_col] = pd.to_datetime(df_copy[datetime_col])
     
     # Group by the date part of the datetime column
-    for date, day_data in df.groupby(df[datetime_col].dt.date):
+    for date, day_data in df_copy.groupby(df_copy[datetime_col].dt.date):
         if len(day_data) < 10:  # Skip days with too few measurements
             continue
             

@@ -2,6 +2,10 @@
 def analyze_sleep_periods(data):
     import pandas as pd
     import numpy as np
+    
+    # Create a copy to avoid SettingWithCopyWarning
+    data = data.copy()
+    
     # =============================================================================
     # sleep state analysis
     # Calculate the rolling average for PIMn

@@ -55,50 +55,50 @@ def main():
                     st.pyplot(fig_light)
                     
                     # Get analysis results
-                    results = analyze_sleep_light_exposure(filtered_data)
+                    sleep_light_exposure_results = analyze_sleep_light_exposure(filtered_data)
                     
                     # Display results in a nicely formatted way
                     st.subheader("Sleep and Light Exposure Analysis")
                     
                     st.write("**Metric 1: Minutes of light exposure (MELANOPIC EDI > 1 lux) during sleep by date:**")
-                    if isinstance(results['metric1'], str):
-                        st.write(results['metric1'])
+                    if isinstance(sleep_light_exposure_results['metric1'], str):
+                        st.write(sleep_light_exposure_results['metric1'])
                     else:
-                        st.dataframe(results['metric1'])
+                        st.dataframe(sleep_light_exposure_results['metric1'])
                     
                     st.write("**Metric 2: Minutes of bright light (MELANOPIC EDI > 10 lux) in the 3 hours before sleep by date:**")
-                    if isinstance(results['metric2'], str):
-                        st.write(results['metric2'])
+                    if isinstance(sleep_light_exposure_results['metric2'], str):
+                        st.write(sleep_light_exposure_results['metric2'])
                     else:
-                        st.dataframe(results['metric2'])
+                        st.dataframe(sleep_light_exposure_results['metric2'])
                     
                     st.write("**Metric 3: Minutes of non-bright light (MELANOPIC EDI < 250 lux) in the 3 hours after waking up by date:**")
-                    if isinstance(results['metric3'], str):
-                        st.write(results['metric3'])
+                    if isinstance(sleep_light_exposure_results['metric3'], str):
+                        st.write(sleep_light_exposure_results['metric3'])
                     else:
-                        st.dataframe(results['metric3'])
+                        st.dataframe(sleep_light_exposure_results['metric3'])
 
                     st.subheader("Derived metrics - sleep periods, CPD of mid sleep, SRI")
                     # Sleep periods analysis
-                    sleep_results = analyze_sleep_periods(filtered_data)
+                    sleep_periods_results = analyze_sleep_periods(filtered_data)
                     st.write("**Sleep Periods Analysis: plus sleep onset and offset**")
-                    if isinstance(sleep_results, str):
-                        st.write(sleep_results)
+                    if isinstance(sleep_periods_results, str):
+                        st.write(sleep_periods_results)
                     else:
-                        st.dataframe(sleep_results)
+                        st.dataframe(sleep_periods_results)
                     
                     # Calculate CPD
                     try:
-                        mid_sleep_data = build_centered_midpoint_hours(sleep_results)
-                        cpd_results = calculate_single_person_cpd(mid_sleep_data, date_col="mid_sleep_DATE", midpoint_col="midpoint_hours_centered")
+                        mid_sleep_data = build_centered_midpoint_hours(sleep_periods_results)
+                        cpd_mid_sleep_results = calculate_single_person_cpd(mid_sleep_data, date_col="mid_sleep_DATE", midpoint_col="midpoint_hours_centered")
                         st.write("**Circadian Phase Dispersion (CPD) Analysis:**")
-                        st.dataframe(cpd_results[['mid_sleep_DATE', 'Mid_sleep_Time', 'cpd_hours', 'mean_midpoint_hours', 'median_midpoint_hours']])
+                        st.dataframe(cpd_mid_sleep_results[['mid_sleep_DATE', 'Mid_sleep_Time', 'cpd_hours', 'mean_midpoint_hours', 'median_midpoint_hours']])
                     except Exception as e:
                         st.write(f"Error calculating CPD: {e}")
                     
                     # Calculate SRI
                     try:
-                        sri_results = calculate_sri_from_pimn(
+                        sri_sleep_results = calculate_sri_from_pimn(
                             filtered_data,  # Use filtered_data instead of data
                             timestamp_col='DATE/TIME',
                             pimn_col='PIMn',
@@ -109,8 +109,8 @@ def main():
                             local_tz="Europe/Berlin"
                         )
                         st.write("**Sleep Regularity Index (SRI) Analysis:**")
-                        if len(sri_results) > 0:
-                            st.dataframe(sri_results)
+                        if len(sri_sleep_results) > 0:
+                            st.dataframe(sri_sleep_results)
                         else:
                             st.write("No SRI results available - insufficient data for analysis (need at least 2 days).")
                     except Exception as e:
@@ -119,30 +119,30 @@ def main():
                     st.subheader("Activity derived metrics: L5, M10, RA, IS, IV, Cosinor fit")
                     # Calculate rolling 2-day IS and IV
                     try:
-                        is_iv_results = compute_rolling_2day_is_iv_activity(
+                        activity_is_iv_results = compute_rolling_2day_is_iv_activity(
                             filtered_data,
                             time_col="DATE/TIME",
                             value_col="PIMn",
                             anchor_hour=12
                         )
                         st.write("**Rolling 2-Day Interdaily Stability (IS) and Intradaily Variability (IV) Analysis:**")
-                        if len(is_iv_results) > 0:
-                            st.dataframe(is_iv_results)
+                        if len(activity_is_iv_results) > 0:
+                            st.dataframe(activity_is_iv_results)
                         else:
                             st.write("No IS/IV results available - insufficient data for analysis (need at least 2 days).")
                     except Exception as e:
                         st.write(f"Error calculating IS/IV: {e}")
                     # Note: L5, M10, RA calculations can be added similarly if needed
                     try:
-                        l5_m10_ra_results = compute_daily_L5_M10_RA_activity(
+                        activity_l5_m10_ra_results = compute_daily_L5_M10_RA_activity(
                             filtered_data,
                             time_col="DATE/TIME",
                             value_col="PIMn",
                             anchor_hour=12
                         )
                         st.write("**Daily L5, M10, and Relative Amplitude (RA) Analysis:**")
-                        if len(l5_m10_ra_results) > 0:
-                            st.dataframe(l5_m10_ra_results)
+                        if len(activity_l5_m10_ra_results) > 0:
+                            st.dataframe(activity_l5_m10_ra_results)
                         else:
                             st.write("No L5/M10/RA results available - insufficient data for analysis.")
                     except Exception as e:
@@ -150,28 +150,28 @@ def main():
                     # Cosinor fit analysis and CPD of activity acrophase
                     st.write("**Cosinor Fit Analysis:**")
                     try:
-                        cosinor_results = fit_cosinor_daily_activity(
+                        activity_cosinor_results = fit_cosinor_daily_activity(
                             filtered_data,
                             datetime_col='DATE/TIME',
                             value_col='PIMn'
                         )
                         st.write("**Daily Cosinor Fit Analysis:**")
-                        if len(cosinor_results) > 0:
-                            st.dataframe(cosinor_results)
+                        if len(activity_cosinor_results) > 0:
+                            st.dataframe(activity_cosinor_results)
                         else:
                             st.write("No Cosinor fit results available - insufficient data for analysis.")
                     except Exception as e:
                         st.write(f"Error calculating Cosinor fit: {e}")
                     # CPD of activity acrophase
                     try:
-                        cpd_activity_results = calculate_cpd_activity(
-                            cosinor_results,
+                        cpd_activity_acrophase_results = calculate_cpd_activity(
+                            activity_cosinor_results,
                             ms_col="acrophase_hours",
                             date_col="date"
                         )
                         st.write("**Composite Phase Deviation (CPD) of Activity Acrophase Analysis:**")
-                        if len(cpd_activity_results) > 0:
-                            st.dataframe(cpd_activity_results[['date', 'cpd_hours', 'deviation_from_mean_hours', 'deviation_from_prev_hours']])
+                        if len(cpd_activity_acrophase_results) > 0:
+                            st.dataframe(cpd_activity_acrophase_results[['date', 'cpd_hours', 'deviation_from_mean_hours', 'deviation_from_prev_hours']])
                         else:
                             st.write("No CPD activity results available - insufficient data for analysis.")
                     except Exception as e:
