@@ -249,6 +249,14 @@ This dictionary maps all variables computed in the application to their source f
 | `activity_cosinor_results` | `fit_cosinor_daily_activity()` | DataFrame | Daily cosinor fit analysis for activity | Cosinor |
 | `cpd_activity_acrophase_results` | `calculate_cpd_activity()` | DataFrame | Composite Phase Deviation of activity acrophase | CPD |
 
+## Light Analysis Variables
+| Variable Name | Source Function | Data Type | Description | Metric Type |
+|---------------|----------------|-----------|-------------|-------------|
+| `light_is_iv_results` | `compute_rolling_2day_is_iv_light()` | DataFrame | Interdaily Stability (IS) and Intradaily Variability (IV) for light | IS/IV |
+| `light_l5_m10_ra_results` | `compute_daily_L5_M10_RA_light()` | DataFrame | L5, M10, and Relative Amplitude analysis for light | L5/M10/RA |
+| `light_cosinor_results` | `fit_cosinor_daily_light()` | DataFrame | Daily cosinor fit analysis for light exposure | Cosinor |
+| `cpd_light_acrophase_results` | `calculate_cpd_light()` | DataFrame | Composite Phase Deviation of light acrophase | CPD |
+
 ## Database Storage Schema Suggestion
 
 ### Primary Tables Structure:
@@ -342,6 +350,48 @@ CREATE TABLE cpd_activity_acrophase (
     deviation_from_mean_hours FLOAT,
     deviation_from_prev_hours FLOAT
 );
+
+-- Light IS/IV metrics
+CREATE TABLE light_is_iv (
+    id SERIAL PRIMARY KEY,
+    session_id INTEGER REFERENCES analysis_sessions(session_id),
+    date DATE,
+    interdaily_stability FLOAT, -- IS
+    intradaily_variability FLOAT -- IV
+);
+
+-- Light L5/M10/RA metrics
+CREATE TABLE light_l5_m10_ra (
+    id SERIAL PRIMARY KEY,
+    session_id INTEGER REFERENCES analysis_sessions(session_id),
+    date DATE,
+    l5_onset_time TIME,
+    l5_value FLOAT,
+    m10_midpoint_time TIME,
+    m10_value FLOAT,
+    relative_amplitude FLOAT -- RA
+);
+
+-- Light cosinor results
+CREATE TABLE light_cosinor (
+    id SERIAL PRIMARY KEY,
+    session_id INTEGER REFERENCES analysis_sessions(session_id),
+    date DATE,
+    mesor FLOAT,
+    amplitude FLOAT,
+    acrophase_hours FLOAT,
+    r_squared FLOAT
+);
+
+-- CPD light acrophase
+CREATE TABLE cpd_light_acrophase (
+    id SERIAL PRIMARY KEY,
+    session_id INTEGER REFERENCES analysis_sessions(session_id),
+    date DATE,
+    cpd_hours FLOAT,
+    deviation_from_mean_hours FLOAT,
+    deviation_from_prev_hours FLOAT
+);
 ```
 
 ### Variable-to-Database Mapping:
@@ -353,3 +403,7 @@ CREATE TABLE cpd_activity_acrophase (
 - `activity_l5_m10_ra_results` → `activity_l5_m10_ra` table
 - `activity_cosinor_results` → `activity_cosinor` table
 - `cpd_activity_acrophase_results` → `cpd_activity_acrophase` table
+- `light_is_iv_results` → `light_is_iv` table
+- `light_l5_m10_ra_results` → `light_l5_m10_ra` table
+- `light_cosinor_results` → `light_cosinor` table
+- `cpd_light_acrophase_results` → `cpd_light_acrophase` table
