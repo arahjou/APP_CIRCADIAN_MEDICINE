@@ -11,6 +11,7 @@ from tools.activity_plotter import activity_plotter
 from tools.activity_IS_IV import compute_rolling_2day_is_iv_activity
 from tools.activity_L5_M10_RA import compute_daily_L5_M10_RA_activity
 from tools.activity_cosinor import fit_cosinor_daily_activity
+from tools.activity_CPD import calculate_cpd_activity
 
 # light
 from tools.light_plotter import light_plotter
@@ -25,7 +26,7 @@ def main():
         if data is not None:
             # Get available dates from the data
             available_dates = get_available_dates(data)
-            
+ # Block for date selection and analysis         
             if available_dates:
                 st.subheader("Date Selection")
                 st.write(f"Data available for {len(available_dates)} dates: {', '.join(available_dates)}")
@@ -161,7 +162,21 @@ def main():
                             st.write("No Cosinor fit results available - insufficient data for analysis.")
                     except Exception as e:
                         st.write(f"Error calculating Cosinor fit: {e}")
-
+                    # CPD of activity acrophase
+                    try:
+                        cpd_activity_results = calculate_cpd_activity(
+                            cosinor_results,
+                            ms_col="acrophase_hours",
+                            date_col="date"
+                        )
+                        st.write("**Composite Phase Deviation (CPD) of Activity Acrophase Analysis:**")
+                        if len(cpd_activity_results) > 0:
+                            st.dataframe(cpd_activity_results[['date', 'cpd_hours', 'deviation_from_mean_hours', 'deviation_from_prev_hours']])
+                        else:
+                            st.write("No CPD activity results available - insufficient data for analysis.")
+                    except Exception as e:
+                        st.write(f"Error calculating CPD of activity acrophase: {e}")
+# End of analysis block
                 elif selected_dates and not submit_button:
                     st.info("Click 'Run Analysis' to start the analysis with your selected dates.")
                 elif not selected_dates:
