@@ -195,6 +195,65 @@ class ActigraphDB:
             print(f"Error deleting record: {e}")
             return False
     
+    def get_analysis_results_as_dataframe(self, record_id: str, table_name: str, analysis_type: str) -> Optional[pd.DataFrame]:
+        """Get specific analysis results as a pandas DataFrame"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(f"SELECT results FROM {table_name} WHERE record_id = ? AND analysis_type = ?", 
+                             (record_id, analysis_type))
+                row = cursor.fetchone()
+                
+                if row:
+                    try:
+                        results_data = json.loads(row[0])
+                        if isinstance(results_data, list):
+                            return pd.DataFrame(results_data)
+                        elif isinstance(results_data, dict):
+                            return pd.DataFrame([results_data])
+                        else:
+                            return pd.DataFrame({'result': [results_data]})
+                    except Exception as e:
+                        print(f"Error converting to DataFrame: {e}")
+                        return None
+                return None
+        except Exception as e:
+            print(f"Error retrieving analysis results as DataFrame: {e}")
+            return None
+    
+    def export_analysis_results(self, record_id: str, export_format: str = 'csv') -> Dict[str, str]:
+        """Export all analysis results for a record to files"""
+        try:
+            export_files = {}
+            tables = ['sleep_analysis', 'activity_analysis', 'light_analysis']
+            
+            for table in tables:
+                results = self.get_analysis_results(record_id, table)
+                for result in results:
+                    analysis_type = result['analysis_type']
+                    try:
+                        if isinstance(result['results'], list):
+                            df = pd.DataFrame(result['results'])
+                        elif isinstance(result['results'], dict):
+                            df = pd.DataFrame([result['results']])
+                        else:
+                            df = pd.DataFrame({'result': [result['results']]})
+                        
+                        filename = f"{record_id}_{analysis_type}.{export_format}"
+                        if export_format == 'csv':
+                            df.to_csv(filename, index=False)
+                        elif export_format == 'excel':
+                            df.to_excel(filename, index=False)
+                        
+                        export_files[analysis_type] = filename
+                    except Exception as e:
+                        print(f"Error exporting {analysis_type}: {e}")
+            
+            return export_files
+        except Exception as e:
+            print(f"Error exporting analysis results: {e}")
+            return {}
+
     def record_exists(self, record_id: str) -> bool:
         """Check if a record ID already exists"""
         try:

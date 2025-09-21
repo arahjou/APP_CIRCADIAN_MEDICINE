@@ -2,6 +2,7 @@ import streamlit as st
 from datetime import datetime
 import sqlite3
 import os
+import pandas as pd
 # utils
 from tools.upload_file import upload_file, get_available_dates, filter_data_by_dates
 from tools.database import ActigraphDB
@@ -374,26 +375,98 @@ def main():
                     # Show analysis results
                     st.write("**Analysis Results:**")
                     
-                    # Sleep analyses
-                    sleep_results = db.get_analysis_results(record['id'], 'sleep_analysis')
-                    if sleep_results:
-                        st.write("🛌 **Sleep Analyses:**")
-                        for result in sleep_results:
-                            st.write(f"  • {result['analysis_type']}")
+                    # Create columns for better layout
+                    result_col1, result_col2 = st.columns([3, 1])
                     
-                    # Activity analyses
-                    activity_results = db.get_analysis_results(record['id'], 'activity_analysis')
-                    if activity_results:
-                        st.write("🏃 **Activity Analyses:**")
-                        for result in activity_results:
-                            st.write(f"  • {result['analysis_type']}")
+                    with result_col1:
+                        # Sleep analyses
+                        sleep_results = db.get_analysis_results(record['id'], 'sleep_analysis')
+                        if sleep_results:
+                            st.write("🛌 **Sleep Analyses:**")
+                            for result in sleep_results:
+                                with st.expander(f"📊 {result['analysis_type']}", expanded=False):
+                                    # Try to display as DataFrame if possible
+                                    try:
+                                        if isinstance(result['results'], list) and len(result['results']) > 0:
+                                            df = pd.DataFrame(result['results'])
+                                            st.dataframe(df, use_container_width=True)
+                                        elif isinstance(result['results'], dict):
+                                            if len(result['results']) > 0:
+                                                df = pd.DataFrame([result['results']])
+                                                st.dataframe(df, use_container_width=True)
+                                            else:
+                                                st.write("No data available")
+                                        else:
+                                            st.write(result['results'])
+                                    except Exception as e:
+                                        st.write(f"Raw data: {result['results']}")
+                        
+                        # Activity analyses
+                        activity_results = db.get_analysis_results(record['id'], 'activity_analysis')
+                        if activity_results:
+                            st.write("🏃 **Activity Analyses:**")
+                            for result in activity_results:
+                                with st.expander(f"📊 {result['analysis_type']}", expanded=False):
+                                    try:
+                                        if isinstance(result['results'], list) and len(result['results']) > 0:
+                                            df = pd.DataFrame(result['results'])
+                                            st.dataframe(df, use_container_width=True)
+                                        elif isinstance(result['results'], dict):
+                                            if len(result['results']) > 0:
+                                                df = pd.DataFrame([result['results']])
+                                                st.dataframe(df, use_container_width=True)
+                                            else:
+                                                st.write("No data available")
+                                        else:
+                                            st.write(result['results'])
+                                    except Exception as e:
+                                        st.write(f"Raw data: {result['results']}")
+                        
+                        # Light analyses
+                        light_results = db.get_analysis_results(record['id'], 'light_analysis')
+                        if light_results:
+                            st.write("💡 **Light Analyses:**")
+                            for result in light_results:
+                                with st.expander(f"📊 {result['analysis_type']}", expanded=False):
+                                    try:
+                                        if isinstance(result['results'], list) and len(result['results']) > 0:
+                                            df = pd.DataFrame(result['results'])
+                                            st.dataframe(df, use_container_width=True)
+                                        elif isinstance(result['results'], dict):
+                                            if len(result['results']) > 0:
+                                                df = pd.DataFrame([result['results']])
+                                                st.dataframe(df, use_container_width=True)
+                                            else:
+                                                st.write("No data available")
+                                        else:
+                                            st.write(result['results'])
+                                    except Exception as e:
+                                        st.write(f"Raw data: {result['results']}")
                     
-                    # Light analyses
-                    light_results = db.get_analysis_results(record['id'], 'light_analysis')
-                    if light_results:
-                        st.write("💡 **Light Analyses:**")
-                        for result in light_results:
-                            st.write(f"  • {result['analysis_type']}")
+                    with result_col2:
+                        st.write("**Actions:**")
+                        
+                        # Export button
+                        if st.button(f"📥 Export Results", key=f"export_{record['id']}", help="Export all analysis results to CSV files"):
+                            try:
+                                export_files = db.export_analysis_results(record['id'], 'csv')
+                                if export_files:
+                                    st.success(f"Exported {len(export_files)} analysis results!")
+                                    for analysis_type, filename in export_files.items():
+                                        st.write(f"📄 {filename}")
+                                else:
+                                    st.warning("No results to export")
+                            except Exception as e:
+                                st.error(f"Export failed: {e}")
+                        
+                        # Raw data download
+                        if st.button(f"📋 View Raw JSON", key=f"raw_{record['id']}", help="View raw JSON data"):
+                            all_results = {
+                                'sleep': sleep_results if 'sleep_results' in locals() else [],
+                                'activity': activity_results if 'activity_results' in locals() else [],
+                                'light': light_results if 'light_results' in locals() else []
+                            }
+                            st.json(all_results)
                     
                     # Add delete button
                     if st.button(f"🗑️ Delete Record", key=f"delete_{record['id']}", type="secondary"):
