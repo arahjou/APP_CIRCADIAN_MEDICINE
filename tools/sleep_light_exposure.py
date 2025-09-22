@@ -109,10 +109,23 @@ def analyze_sleep_light_exposure(df_subset):
     
     print("="*50 + "\nScript finished.")
     
-    # Prepare results to return for web app display
+    # Prepare results to return for web app display - convert pandas Series to JSON-serializable format
     results = {}
-    results['metric1'] = minutes_light_by_date if not minutes_light_by_date.empty else "No light exposure detected during sleep periods."
-    results['metric2'] = minutes_bright_before_sleep_by_date if not minutes_bright_before_sleep_by_date.empty else "No bright light exposure detected in the 3 hours before sleep."
-    results['metric3'] = minutes_not_bright_after_wake_by_date if not minutes_not_bright_after_wake_by_date.empty else "No non-bright light exposure detected in the 3 hours after waking up."
+    
+    # Convert pandas Series to list of dictionaries for database storage
+    if not minutes_light_by_date.empty:
+        results['metric1'] = [{'date': str(date), 'minutes': int(minutes)} for date, minutes in minutes_light_by_date.items()]
+    else:
+        results['metric1'] = "No light exposure detected during sleep periods."
+    
+    if not minutes_bright_before_sleep_by_date.empty:
+        results['metric2'] = [{'date': str(date), 'minutes': int(minutes)} for date, minutes in minutes_bright_before_sleep_by_date.items()]
+    else:
+        results['metric2'] = "No bright light exposure detected in the 3 hours before sleep."
+    
+    if not minutes_not_bright_after_wake_by_date.empty:
+        results['metric3'] = [{'date': str(date), 'minutes': int(minutes)} for date, minutes in minutes_not_bright_after_wake_by_date.items()]
+    else:
+        results['metric3'] = "No non-bright light exposure detected in the 3 hours after waking up."
     
     return results
