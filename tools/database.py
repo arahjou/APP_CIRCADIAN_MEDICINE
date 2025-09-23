@@ -264,3 +264,126 @@ class ActigraphDB:
         except Exception as e:
             print(f"Error checking record existence: {e}")
             return False
+
+    def get_aggregated_metrics_for_ids(
+        self,
+        record_ids: List[str],
+        include_tables: Optional[List[str]] = None,
+        include_analysis_types: Optional[List[str]] = None,
+        agg: str = "mean",
+    ) -> pd.DataFrame:
+        """
+        Aggregate numeric metrics for given IDs across saved analyses.
+
+        For each record_id, this function:
+        - Loads all results from sleep/activity/light tables (or a subset via include_tables)
+        - Optionally filters by analysis_type via include_analysis_types
+        - Converts result payloads to DataFrames when possible
+        - Collects all numeric columns and computes the requested aggregation (default mean)
+        - Returns a single row per record_id with columns prefixed by "{table}.{analysis_type}.{column}_{agg}"
+
+        Parameters
+        ----------
+        record_ids : List[str]
+            IDs to aggregate
+        include_tables : Optional[List[str]]
+            Subset of tables to include; default is all ['sleep_analysis','activity_analysis','light_analysis']
+        include_analysis_types : Optional[List[str]]
+            If provided, only include these analysis_type names
+        agg : str
+            Aggregation to compute on numeric columns ('mean', 'median', etc. supported by pandas)
+
+        Returns
+        -------
+        pd.DataFrame
+            One row per record_id; numeric aggregates as columns
+        """
+        tables = include_tables or ["sleep_analysis", "activity_analysis", "light_analysis"]
+
+        rows: List[Dict[str, Any]] = []
+
+        for rid in record_ids:
+            row: Dict[str, Any] = {"id": rid}
+            try:
+                for table in tables:
+                    try:
+                        results = self.get_analysis_results(rid, table)
+                    except Exception as e:
+                        print(f"Warning: failed to read results for id={rid}, table={table}: {e}")
+                        continue
+
+                    # Group by analysis_type across possibly multiple entries
+                    by_type: Dict[str, List[pd.DataFrame]] = {}
+                    for r in results:
+                        a_type = r.get("analysis_type", "unknown")
+                        if include_analysis_types and a_type not in include_analysis_types:
+                            continue
+
+                        payload = r.get("results")
+                        df_payload: Optional[pd.DataFrame] = None
+
+                        # Try to coerce payload into a DataFrame
+                        try:
+                            if isinstance(payload, list):
+                                # list of dicts or primitives
+                                df_payload = pd.DataFrame(payload)
+                            elif isinstance(payload, dict):
+                                df_payload = pd.DataFrame([payload])
+                            else:
+                                # Could be a string or other: attempt JSON load then DataFrame
+                                try:
+                                    if isinstance(payload, (str, bytes, bytearray)) and payload:
+                                        parsed = json.loads(payload)
+                                        if isinstance(parsed, list):
+                                            df_payload = pd.DataFrame(parsed)
+                                        elif isinstance(parsed, dict):
+                                            df_payload = pd.DataFrame([parsed])
+                                except Exception:
+                                    df_payload = None
+                        except Exception:
+                            df_payload = None
+
+                        if df_payload is None or df_payload.empty:
+                            continue
+
+                        # Keep only numeric columns
+                        numeric_df = df_payload.select_dtypes(include=["number"]).copy()
+                        if numeric_df.empty:
+                            continue
+
+                        by_type.setdefault(a_type, []).append(numeric_df)
+
+                    # Reduce each analysis_type: concat then aggregate
+                    for a_type, frames in by_type.items():
+                        try:
+                            all_vals = pd.concat(frames, ignore_index=True)
+                            if all_vals.empty:
+                                continue
+                            agg_vals = getattr(all_vals, agg)() if hasattr(all_vals, agg) else all_vals.mean()
+                            # add columns with prefix
+                            for col, val in agg_vals.items():
+                                key = f"{table}.{a_type}.{col}_{agg}"
+                                # ensure Python primitives for JSON/display friendliness
+                                if pd.isna(val):
+                                    row[key] = float("nan")
+                                else:
+                                    row[key] = float(val)
+                        except Exception as e:
+                            print(f"Warning: aggregation failed for id={rid}, table={table}, type={a_type}: {e}")
+
+            except Exception as e:
+                print(f"Warning: aggregation failed for id={rid}: {e}")
+
+            rows.append(row)
+
+        # Assemble final DataFrame and sort columns: id first, then others sorted
+        if not rows:
+            return pd.DataFrame(columns=["id"])  # empty result
+
+        df_out = pd.DataFrame(rows)
+        # Move id to first column
+        cols = list(df_out.columns)
+        if "id" in cols:
+            cols = ["id"] + [c for c in cols if c != "id"]
+            df_out = df_out[cols]
+        return df_out
