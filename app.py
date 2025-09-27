@@ -21,7 +21,7 @@ from tools.activity_CPD import calculate_cpd_activity
 # light
 from tools.light_plotter import light_plotter
 from tools.light_IS_IV import compute_rolling_2day_is_iv_light
-from tools.light_L5_M10_RA_empty import compute_daily_L5_M10_RA_light
+from tools.light_L5_M10_RA import compute_daily_L5_M10_RA_light
 from tools.light_cosinor import fit_cosinor_daily_activity as fit_cosinor_daily_light
 from tools.light_CPD import calculate_cpd_light
 def main():
