@@ -1,0 +1,300 @@
+
+<html>
+<head>
+    <title>Circadian Medicine Report</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            margin: 0;
+            background-color: #f9f9f9;
+            color: #333;
+        }
+        .container {
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+        }
+        h1 {
+            color: #1a237e;
+            text-align: center;
+            border-bottom: 2px solid #3949ab;
+            padding-bottom: 10px;
+            margin-bottom: 10px;
+        }
+        h2 {
+            color: #3949ab;
+            border-bottom: 1px solid #c5cae9;
+            padding-bottom: 8px;
+            margin-top: 40px;
+        }
+        h3 {
+            color: #5c6bc0;
+            margin-top: 30px;
+        }
+        p.summary {
+            text-align: center;
+            font-size: 1.1em;
+            color: #555;
+            margin-bottom: 30px;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-top: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        th, td {
+            border: 1px solid #e0e0e0;
+            padding: 12px;
+            text-align: left;
+        }
+        th {
+            background-color: #e8eaf6;
+            font-weight: 600;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .navbar {
+            background-color: #3949ab;
+            padding: 10px 0;
+            text-align: center;
+            border-radius: 8px 8px 0 0;
+        }
+        .navbar a {
+            color: white;
+            padding: 10px 20px;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .navbar a:hover {
+            background-color: #5c6bc0;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Report</h1>
+        <p class="summary">This report provides a comprehensive analysis of the circadian rhythms and activity patterns of the subjects over the study period.</p>
+
+        <div class="navbar">
+            <a href="#section-sleep">Sleep & Circadian Health</a>
+            <a href="#section-activity">Activity Patterns</a>
+            <a href="#section-light">Light Exposure</a>
+        </div>
+<h2 id="section-sleep">Sleep and Circadian Health</h2><h3>Circadian Rhythms and Sleep Metrics</h3><table class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Name</th>
+      <th>Period1</th>
+      <th>Period2</th>
+      <th>Difference</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>CPD mid sleep</td>
+      <td>4.77</td>
+      <td>5.75</td>
+      <td>0.98</td>
+    </tr>
+    <tr>
+      <td>SRI</td>
+      <td>79.72</td>
+      <td>42.93</td>
+      <td>-36.79</td>
+    </tr>
+    <tr>
+      <td>Sleep Duration</td>
+      <td>6.00</td>
+      <td>19.00</td>
+      <td>13.00</td>
+    </tr>
+  </tbody>
+</table><h3>Light Exposure Recommendations</h3><table class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Name</th>
+      <th>Period1</th>
+      <th>Period2</th>
+      <th>Difference</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>↑ recom. during sleep</td>
+      <td>44.0</td>
+      <td>12.5</td>
+      <td>-31.5</td>
+    </tr>
+    <tr>
+      <td>↑ recom. before sleep</td>
+      <td>4.0</td>
+      <td>47.0</td>
+      <td>43.0</td>
+    </tr>
+    <tr>
+      <td>↓ recom. after waking</td>
+      <td>139.0</td>
+      <td>226.0</td>
+      <td>87.0</td>
+    </tr>
+  </tbody>
+</table><h2 id="section-activity">Activity Patterns</h2><h3>Interdaily Stability (IS) and Intradaily Variability (IV)</h3><table class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Name</th>
+      <th>Period1</th>
+      <th>Period2</th>
+      <th>Difference</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>IS</td>
+      <td>0.37</td>
+      <td>0.26</td>
+      <td>-0.11</td>
+    </tr>
+    <tr>
+      <td>IV</td>
+      <td>0.39</td>
+      <td>0.51</td>
+      <td>0.12</td>
+    </tr>
+  </tbody>
+</table><h3>Most Active 10h (M10), Least Active 5h (L5), and Relative Amplitude (RA)</h3><table class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Name</th>
+      <th>Period1</th>
+      <th>Period2</th>
+      <th>Difference</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>M10</td>
+      <td>48.84</td>
+      <td>36.83</td>
+      <td>-12.01</td>
+    </tr>
+    <tr>
+      <td>L5</td>
+      <td>9.31</td>
+      <td>2.05</td>
+      <td>-7.26</td>
+    </tr>
+    <tr>
+      <td>RA</td>
+      <td>0.75</td>
+      <td>0.85</td>
+      <td>0.10</td>
+    </tr>
+  </tbody>
+</table><h3>Cosinor Analysis (Mesor and Acrophase)</h3><table class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Name</th>
+      <th>Period1</th>
+      <th>Period2</th>
+      <th>Difference</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Mesor</td>
+      <td>36.89</td>
+      <td>31.78</td>
+      <td>-5.11</td>
+    </tr>
+    <tr>
+      <td>CPD2</td>
+      <td>3.81</td>
+      <td>0.67</td>
+      <td>-3.14</td>
+    </tr>
+  </tbody>
+</table><h2 id="section-light">Light Exposure Patterns</h2><h3>Light Exposure IS and IV</h3><table class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Name</th>
+      <th>Period1</th>
+      <th>Period2</th>
+      <th>Difference</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>IS</td>
+      <td>0.27</td>
+      <td>0.09</td>
+      <td>-0.18</td>
+    </tr>
+    <tr>
+      <td>IV</td>
+      <td>0.55</td>
+      <td>0.76</td>
+      <td>0.21</td>
+    </tr>
+  </tbody>
+</table><h3>Light Exposure L5, M10, and RA</h3><table class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Name</th>
+      <th>Period1</th>
+      <th>Period2</th>
+      <th>Difference</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>M10</td>
+      <td>129.16</td>
+      <td>234.31</td>
+      <td>105.15</td>
+    </tr>
+    <tr>
+      <td>L5</td>
+      <td>2.16</td>
+      <td>0.00</td>
+      <td>-2.16</td>
+    </tr>
+    <tr>
+      <td>RA</td>
+      <td>0.98</td>
+      <td>1.00</td>
+      <td>0.02</td>
+    </tr>
+  </tbody>
+</table><h3>Light Exposure Cosinor Analysis</h3><table class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Name</th>
+      <th>Period1</th>
+      <th>Period2</th>
+      <th>Difference</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Mesor</td>
+      <td>84.04</td>
+      <td>181.53</td>
+      <td>97.49</td>
+    </tr>
+    <tr>
+      <td>CPD3</td>
+      <td>0.27</td>
+      <td>1.11</td>
+      <td>0.84</td>
+    </tr>
+  </tbody>
+</table>
+    </div>
+</body>
+</html>
