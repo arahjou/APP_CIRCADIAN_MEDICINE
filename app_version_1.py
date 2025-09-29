@@ -1,5 +1,4 @@
 import streamlit as st
-import streamlit.components.v1 as components
 from datetime import datetime
 import sqlite3
 import os
@@ -25,7 +24,6 @@ from tools.light_IS_IV import compute_rolling_2day_is_iv_light
 from tools.light_L5_M10_RA import compute_daily_L5_M10_RA_light
 from tools.light_cosinor import fit_cosinor_daily_activity as fit_cosinor_daily_light
 from tools.light_CPD import calculate_cpd_light
-from tools.report_generator import generate_comparison_report
 def main():
     # Initialize database
     db = ActigraphDB()
@@ -35,7 +33,7 @@ def main():
     st.write('I am gathering various tools and resources related to Circadian Medicine here!')
     
     # Create tabs for different functionalities
-    tab1, tab2 = st.tabs(["📊 New Analysis", "⚖️ Compare Records"])
+    tab1, tab2 = st.tabs(["📊 New Analysis", "📋 View Records"])
     
     with tab1:
         # Add input fields for ID, Description, and Date
@@ -342,30 +340,143 @@ def main():
         st.info("Please upload a file to begin analysis.")
     
     with tab2:
-        st.subheader("⚖️ Compare Two Analysis Records")
+        st.subheader("📋 Analysis Records")
         
+        # Get all records from database
         records = db.get_all_records()
-        record_ids = [record['id'] for record in records]
         
-        col1, col2 = st.columns(2)
-        with col1:
-            id1 = st.selectbox("Select first record ID", options=record_ids, key="id1")
-        with col2:
-            id2 = st.selectbox("Select second record ID", options=record_ids, key="id2")
+        if records:
+            st.write(f"Found {len(records)} analysis records:")
             
-        if st.button("Compare Records", type="primary"):
-            if id1 and id2:
-                if id1 == id2:
-                    st.error("Please select two different records to compare.")
-                else:
-                    with st.spinner("Generating comparison report..."):
-                        report_html, _ = generate_comparison_report([id1, id2])
-                        if report_html:
-                            components.html(report_html, height=800, scrolling=True)
+            # Display records in a nice format
+            for record in records:
+                with st.expander(f"🔍 {record['id']} - {record['description']}", expanded=False):
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        st.write(f"**ID:** {record['id']}")
+                        st.write(f"**Description:** {record['description']}")
+                    
+                    with col2:
+                        st.write(f"**Analysis Date:** {record['date']}")
+                        st.write(f"**Created:** {record['created_at']}")
+                    
+                    with col3:
+                        if record['file_name']:
+                            st.write(f"**File:** {record['file_name']}")
+                        if record['selected_dates']:
+                            import json
+                            try:
+                                dates = json.loads(record['selected_dates'])
+                                st.write(f"**Dates:** {', '.join(dates)}")
+                            except:
+                                st.write(f"**Dates:** {record['selected_dates']}")
+                    
+                    # Show analysis results
+                    st.write("**Analysis Results:**")
+                    
+                    # Create columns for better layout
+                    result_col1, result_col2 = st.columns([3, 1])
+                    
+                    with result_col1:
+                        # Sleep analyses
+                        sleep_results = db.get_analysis_results(record['id'], 'sleep_analysis')
+                        if sleep_results:
+                            st.write("🛌 **Sleep Analyses:**")
+                            for result in sleep_results:
+                                with st.expander(f"📊 {result['analysis_type']}", expanded=False):
+                                    # Try to display as DataFrame if possible
+                                    try:
+                                        if isinstance(result['results'], list) and len(result['results']) > 0:
+                                            df = pd.DataFrame(result['results'])
+                                            st.dataframe(df, use_container_width=True)
+                                        elif isinstance(result['results'], dict):
+                                            if len(result['results']) > 0:
+                                                df = pd.DataFrame([result['results']])
+                                                st.dataframe(df, use_container_width=True)
+                                            else:
+                                                st.write("No data available")
+                                        else:
+                                            st.write(result['results'])
+                                    except Exception as e:
+                                        st.write(f"Raw data: {result['results']}")
+                        
+                        # Activity analyses
+                        activity_results = db.get_analysis_results(record['id'], 'activity_analysis')
+                        if activity_results:
+                            st.write("🏃 **Activity Analyses:**")
+                            for result in activity_results:
+                                with st.expander(f"📊 {result['analysis_type']}", expanded=False):
+                                    try:
+                                        if isinstance(result['results'], list) and len(result['results']) > 0:
+                                            df = pd.DataFrame(result['results'])
+                                            st.dataframe(df, use_container_width=True)
+                                        elif isinstance(result['results'], dict):
+                                            if len(result['results']) > 0:
+                                                df = pd.DataFrame([result['results']])
+                                                st.dataframe(df, use_container_width=True)
+                                            else:
+                                                st.write("No data available")
+                                        else:
+                                            st.write(result['results'])
+                                    except Exception as e:
+                                        st.write(f"Raw data: {result['results']}")
+                        
+                        # Light analyses
+                        light_results = db.get_analysis_results(record['id'], 'light_analysis')
+                        if light_results:
+                            st.write("💡 **Light Analyses:**")
+                            for result in light_results:
+                                with st.expander(f"📊 {result['analysis_type']}", expanded=False):
+                                    try:
+                                        if isinstance(result['results'], list) and len(result['results']) > 0:
+                                            df = pd.DataFrame(result['results'])
+                                            st.dataframe(df, use_container_width=True)
+                                        elif isinstance(result['results'], dict):
+                                            if len(result['results']) > 0:
+                                                df = pd.DataFrame([result['results']])
+                                                st.dataframe(df, use_container_width=True)
+                                            else:
+                                                st.write("No data available")
+                                        else:
+                                            st.write(result['results'])
+                                    except Exception as e:
+                                        st.write(f"Raw data: {result['results']}")
+                    
+                    with result_col2:
+                        st.write("**Actions:**")
+                        
+                        # Export button
+                        if st.button(f"📥 Export Results", key=f"export_{record['id']}", help="Export all analysis results to CSV files"):
+                            try:
+                                export_files = db.export_analysis_results(record['id'], 'csv')
+                                if export_files:
+                                    st.success(f"Exported {len(export_files)} analysis results!")
+                                    for analysis_type, filename in export_files.items():
+                                        st.write(f"📄 {filename}")
+                                else:
+                                    st.warning("No results to export")
+                            except Exception as e:
+                                st.error(f"Export failed: {e}")
+                        
+                        # Raw data download
+                        if st.button(f"📋 View Raw JSON", key=f"raw_{record['id']}", help="View raw JSON data"):
+                            all_results = {
+                                'sleep': sleep_results if 'sleep_results' in locals() else [],
+                                'activity': activity_results if 'activity_results' in locals() else [],
+                                'light': light_results if 'light_results' in locals() else []
+                            }
+                            st.json(all_results)
+                    
+                    # Add delete button
+                    if st.button(f"🗑️ Delete Record", key=f"delete_{record['id']}", type="secondary"):
+                        if db.delete_record(record['id']):
+                            st.success(f"Record '{record['id']}' deleted successfully!")
+                            st.rerun()
                         else:
-                            st.error("Could not generate comparison report.")
-            else:
-                st.warning("Please select two records to compare.")
-
+                            st.error(f"Failed to delete record '{record['id']}'")
+        else:
+            st.info("No analysis records found. Run some analyses to see them here!")
+            st.write("💡 **Tip:** Go to the 'New Analysis' tab to create your first analysis record.")
 if __name__ == "__main__":
     main()
