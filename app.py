@@ -32,7 +32,7 @@ def main():
     
     image = 'image/Circadian Medicine.png'
     st.image(image, width='stretch')
-    st.write('I am gathering various tools and resources related to Circadian Medicine here!')
+    st.write('Welcome to Our Data Analysis App! This app allows you to upload actigraph data files, perform comprehensive analyses, and compare results between different records. Please follow the steps below to get started.')
     
     # Create tabs for different functionalities
     tab1, tab2 = st.tabs(["📊 New Analysis", "⚖️ Compare Records"])
