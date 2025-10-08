@@ -142,4 +142,96 @@ def save_analysis(analysis_text, filename="llm_analysis.txt"):
     with open(filepath, "w") as f:
         f.write(analysis_text)
     return filepath
+
+
+def continue_conversation(user_question, json_filepath, conversation_history, model="phi4:14b"):
+    """
+    Continues the conversation about circadian data with follow-up questions.
+    Maintains context from initial analysis and previous questions.
+    
+    Args:
+        user_question: The follow-up question from the user
+        json_filepath: Path to the JSON report file (for reference)
+        conversation_history: List of previous messages [{"role": "user/assistant", "content": "..."}]
+        model: Ollama model to use (default: phi4:14b)
+    
+    Returns:
+        str: LLM response to the question
+    """
+    import ollama
+    
+    # Load JSON data for context
+    try:
+        with open(json_filepath, 'r') as f:
+            report_data = json.load(f)
+    except Exception as e:
+        return f"Error loading report data: {e}"
+    
+    # System prompt for conversational analysis
+    system_prompt = """You are a circadian medicine specialist having a conversation about sleep and activity data analysis.
+
+# Context About the Data:
+You have access to a comprehensive circadian medicine report comparing two time periods with metrics including:
+- **Sleep metrics**: CPD (Circadian Phase Deviation), SRI (Sleep Regularity Index), Sleep Duration
+- **Activity metrics**: IS (Interdaily Stability), IV (Intradaily Variability), M10, L5, RA (Relative Amplitude), Mesor, Acrophase
+- **Light exposure metrics**: Light exposure timing and intensity patterns
+
+# Metric Definitions:
+- **CPD**: Hours from expected circadian timing (lower = better alignment)
+- **SRI**: Sleep regularity 0-100 (higher = more consistent, >80 is good)
+- **IS**: Daily rhythm consistency 0-1 (higher = better, >0.6 is good)
+- **IV**: Within-day fragmentation 0-2 (lower = smoother, <0.5 is good)
+- **M10**: Most active 10 hours (higher = more activity)
+- **L5**: Least active 5 hours (lower = better rest)
+- **RA**: Relative amplitude (M10-L5)/(M10+L5) (higher = stronger rhythm, >0.87 is good)
+
+# Your Role:
+Answer follow-up questions about the circadian data analysis, focusing on:
+1. **Psychological impacts**: How circadian patterns affect mood, cognitive function, mental health
+2. **Behavioral impacts**: How changes in sleep/activity patterns influence daily functioning
+3. **Clinical implications**: What these patterns mean for overall health and wellbeing
+4. **Practical advice**: Specific, actionable recommendations based on the data
+5. **Deeper insights**: Explain mechanisms, relationships, and long-term effects
+
+# Guidelines:
+- Provide evidence-based explanations grounded in circadian biology and psychology
+- Explain mechanisms clearly (e.g., how irregular sleep affects cortisol, mood regulation)
+- Give specific, actionable advice when appropriate
+- Reference the actual data from the report when relevant
+- Be conversational but professional
+- If asked about topics beyond the data, explain what can/cannot be inferred from the available metrics
+
+Keep responses focused, informative (300-500 words), and directly address the user's question."""
+
+    # Build message history with context
+    messages = [{"role": "system", "content": system_prompt}]
+    
+    # Add conversation history
+    messages.extend(conversation_history)
+    
+    # Add current question with data reference
+    current_message = f"""User Question: {user_question}
+
+# Available Report Data:
+{json.dumps(report_data, indent=2)}
+
+Please answer the question with specific reference to the data when relevant."""
+    
+    messages.append({"role": "user", "content": current_message})
+    
+    # Call Ollama API
+    try:
+        response = ollama.chat(
+            model=model,
+            messages=messages,
+            stream=False,
+            options={
+                'temperature': 0.4  # Slightly higher for conversational responses
+            }
+        )
+        
+        return response['message']['content']
+    
+    except Exception as e:
+        return f"Error during conversation: {e}\n\nPlease ensure Ollama is running and the model '{model}' is available."
     

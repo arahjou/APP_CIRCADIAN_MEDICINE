@@ -5,121 +5,145 @@
 **Sleep and Circadian Health:**
 
 1. **Circadian Phase Deviation (CPD mid sleep):**
-   - **Period 1:** 4.77
-   - **Period 2:** 5.75
-   - **Change:** +0.98
+   - **Period 1:** 4.77 hours
+   - **Period 2:** 5.75 hours
+   - **Difference:** +0.98 hours
 
    The increase in CPD indicates a shift away from the natural circadian rhythm, suggesting poorer alignment with the body's internal clock.
 
 2. **Sleep Regularity Index (SRI):**
    - **Period 1:** 79.72
    - **Period 2:** 42.93
-   - **Change:** -36.79
+   - **Difference:** -36.79
 
    A significant drop in SRI reflects a less consistent sleep schedule, which can negatively impact overall health and cognitive function.
 
 3. **Sleep Duration:**
    - **Period 1:** 6 hours (360 minutes)
    - **Period 2:** 19 hours (1140 minutes)
-   - **Change:** +13 hours
+   - **Difference:** +13 hours
 
-   The drastic increase in reported sleep duration is concerning, potentially indicating periods of prolonged restlessness or fragmented sleep.
+   The drastic increase in sleep duration is concerning, potentially indicating disrupted sleep patterns or excessive daytime napping.
 
 **Light Exposure Recommendations:**
 
-1. **↑ Recommended during Sleep:**
+1. **↑ recom. during sleep:**
    - **Period 1:** 44
    - **Period 2:** 12.5
-   - **Change:** -31.5
+   - **Difference:** -31.5
 
-   A decrease in light exposure during sleep is positive, as it suggests a darker environment conducive to better sleep quality.
+   Improved light exposure recommendations during sleep suggest a better sleep environment in Period 2.
 
-2. **↑ Recommended before Sleep:**
+2. **↑ recom. before sleep:**
    - **Period 1:** 4
    - **Period 2:** 47
-   - **Change:** +43
+   - **Difference:** +43
 
-   Increased light exposure before sleep can disrupt melatonin production and delay sleep onset, which is concerning for circadian health.
+   Increased light exposure before sleep is problematic, as it can suppress melatonin production and delay sleep onset.
 
-3. **↓ Recommended after Waking:**
+3. **↓ recom. after waking:**
    - **Period 1:** 139
    - **Period 2:** 226
-   - **Change:** +87
+   - **Difference:** +87
 
-   Higher morning light exposure is beneficial as it helps reset the circadian clock and promote wakefulness.
+   A higher recommendation for morning light exposure is beneficial, aiding in circadian rhythm regulation.
 
 **Activity Patterns:**
 
 1. **Interdaily Stability (IS):**
    - **Period 1:** 0.37
    - **Period 2:** 0.26
-   - **Change:** -0.11
+   - **Difference:** -0.11
 
-   A decrease in IS indicates less consistency in daily activity patterns, which can affect circadian alignment.
+   A decrease in IS indicates less consistency in daily activity patterns, which can disrupt circadian rhythms.
 
 2. **Intradaily Variability (IV):**
    - **Period 1:** 0.39
    - **Period 2:** 0.51
-   - **Change:** +0.12
+   - **Difference:** +0.12
 
-   Increased IV suggests more fragmented or irregular daily activity patterns, which can disrupt circadian rhythms.
+   Increased IV suggests more fragmented activity throughout the day, potentially affecting sleep quality and energy levels.
 
-3. **Relative Amplitude (RA):**
+3. **Most Active 10h (M10):**
+   - **Period 1:** 48.84
+   - **Period 2:** 36.83
+   - **Difference:** -12.01
+
+   A decrease in daytime activity level may contribute to reduced alertness and productivity during the day.
+
+4. **Least Active 5h (L5):**
+   - **Period 1:** 9.31
+   - **Period 2:** 2.05
+   - **Difference:** -7.26
+
+   Lower L5 indicates less activity during typical sleep hours, which is positive for circadian alignment.
+
+5. **Relative Amplitude (RA):**
    - **Period 1:** 0.75
    - **Period 2:** 0.85
-   - **Change:** +0.10
+   - **Difference:** +0.10
 
-   An increase in RA indicates a stronger day/night activity rhythm, which is beneficial for circadian health.
+   An increase in RA suggests a stronger distinction between day and night activity levels, which is beneficial for circadian health.
 
 **Light Exposure Patterns:**
 
 1. **Interdaily Stability (IS):**
    - **Period 1:** 0.27
    - **Period 2:** 0.09
-   - **Change:** -0.18
+   - **Difference:** -0.18
 
-   A decrease in light IS suggests less consistent daily light exposure patterns, which can negatively impact circadian alignment.
+   A decrease in light exposure IS indicates less consistent daily light patterns, which can disrupt circadian rhythms.
 
 2. **Intradaily Variability (IV):**
    - **Period 1:** 0.55
    - **Period 2:** 0.76
-   - **Change:** +0.21
+   - **Difference:** +0.21
 
-   Increased IV in light exposure indicates more fragmented light patterns, which can disrupt circadian rhythms.
+   Increased IV in light exposure suggests more variability and potential disruption to the natural light-dark cycle.
 
-3. **Relative Amplitude (RA):**
-   - **Period 1:** 0.98
-   - **Period 2:** 1.00
-   - **Change:** +0.02
+3. **Light Exposure M10:**
+   - **Period 1:** 129.16
+   - **Period 2:** 234.31
+   - **Difference:** +105.15
 
-   An increase in RA suggests a stronger day/night light rhythm, which is beneficial for circadian health.
+   Higher light exposure during active hours is positive, supporting alertness and circadian alignment.
+
+4. **Light Exposure L5:**
+   - **Period 1:** 2.16
+   - **Period 2:** 0.00
+   - **Difference:** -2.16
+
+   Reduced light exposure during sleep hours is beneficial for maintaining a healthy sleep-wake cycle.
 
 #### Clinical Interpretation:
 
-The data indicates several areas of concern and improvement between the two periods. The significant drop in SRI and IS, along with increased IV, points to less regular sleep and activity patterns, which can lead to circadian misalignment and associated health issues such as mood disturbances, cognitive impairment, and metabolic dysregulation.
+The data indicates several areas of concern and improvement between the two periods. The increase in CPD mid sleep and decrease in SRI suggest that the subject's circadian rhythm has become less aligned with natural patterns, potentially leading to issues such as insomnia or daytime fatigue. The drastic change in sleep duration raises concerns about sleep quality and potential disruptions.
 
-The increase in CPD mid sleep suggests a shift away from the natural circadian rhythm, potentially due to inconsistent light exposure or irregular schedules. The drastic change in reported sleep duration raises concerns about sleep quality and potential insomnia or hypersomnia.
+Light exposure before sleep increased significantly, which is detrimental to melatonin production and can delay sleep onset. However, improvements in light exposure during sleep and after waking are positive changes that support circadian health.
 
-However, improvements in RA for both activity and light exposure indicate stronger day/night rhythms, which is positive for circadian health. Reduced light exposure during sleep is also beneficial, as it supports better sleep quality.
+Activity patterns show decreased consistency (IS) and increased fragmentation (IV), indicating a need for more regular daily routines. The increase in RA is a positive sign of stronger day-night differentiation, which supports better circadian alignment.
 
 #### Recommendations:
 
 1. **Improve Sleep Regularity:**
-   - Establish a consistent bedtime and wake-up time to enhance SRI.
-   - Create a pre-sleep routine that minimizes light exposure, such as dimming lights an hour before bed.
+   - Establish a consistent sleep schedule by going to bed and waking up at the same time every day.
+   - Limit naps during the day to prevent excessive total sleep duration.
 
 2. **Optimize Light Exposure:**
-   - Increase morning light exposure by spending more time outdoors or using bright light therapy upon waking.
-   - Minimize evening and nighttime light exposure to support melatonin production.
+   - Minimize exposure to bright lights, especially screens, before bedtime to enhance melatonin production.
+   - Increase morning light exposure through outdoor activities or light therapy to strengthen circadian rhythms.
 
 3. **Enhance Activity Consistency:**
-   - Encourage regular physical activity during the day, particularly in natural daylight, to strengthen IS and reduce IV.
-   - Avoid excessive napping or irregular sleep patterns that can disrupt circadian alignment.
+   - Develop a regular daily routine that includes consistent times for meals, exercise, and other activities.
+   - Reduce variability in activity levels throughout the day to improve IS and decrease IV.
 
-#### Prioritize Actions:
+4. **Monitor Sleep Environment:**
+   - Ensure a dark, quiet sleep environment to maintain low light exposure during sleep hours.
 
-1. **Address Sleep Regularity and Light Exposure Before Bed:** These changes will have immediate impacts on melatonin production and sleep quality, which are foundational for overall circadian health.
+#### Prioritized Actions:
 
-2. **Enhance Morning Light Exposure:** This action is crucial for resetting the circadian clock each day and promoting alertness during waking hours.
+1. **Address Light Exposure Before Sleep:** Reducing pre-sleep light exposure is crucial for improving sleep onset and quality.
+2. **Establish Consistent Sleep Patterns:** Regularizing sleep schedules will enhance SRI and overall circadian alignment.
+3. **Increase Morning Light Exposure:** This should be prioritized to reset the internal clock effectively.
 
-By focusing on these areas, patients can improve their circadian alignment, leading to better sleep, mood, cognitive function, and overall well-being.
+By focusing on these areas, individuals can improve their circadian health, leading to better sleep quality, increased daytime alertness, and overall well-being.

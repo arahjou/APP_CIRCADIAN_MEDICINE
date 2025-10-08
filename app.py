@@ -27,7 +27,7 @@ from tools.light_L5_M10_RA import compute_daily_L5_M10_RA_light
 from tools.light_cosinor import fit_cosinor_daily_activity as fit_cosinor_daily_light
 from tools.light_CPD import calculate_cpd_light
 from tools.report_generator import generate_comparison_report, save_json_report
-from tools.llm_conversation import analyze_circadian_report, save_analysis
+from tools.llm_conversation import analyze_circadian_report, save_analysis, continue_conversation
 def main():
     # Initialize database
     db = ActigraphDB()
@@ -389,12 +389,27 @@ def main():
             help="Choose the Ollama model for analysis"
         )
         
+        # Initialize session state for chat
+        if 'chat_messages' not in st.session_state:
+            st.session_state.chat_messages = []
+        if 'json_filepath' not in st.session_state:
+            st.session_state.json_filepath = None
+        if 'current_analysis_ids' not in st.session_state:
+            st.session_state.current_analysis_ids = None
+        if 'current_model' not in st.session_state:
+            st.session_state.current_model = None
+        
         if st.button("🧠 Generate AI Analysis", type="primary"):
             if ai_id1 and ai_id2:
                 if ai_id1 == ai_id2:
                     st.error("Please select two different periods to compare.")
                 else:
                     try:
+                        # Reset chat when generating new analysis
+                        st.session_state.chat_messages = []
+                        st.session_state.current_analysis_ids = (ai_id1, ai_id2)
+                        st.session_state.current_model = model_option
+                        
                         # Step 1: Generate report data
                         with st.spinner("⏳ Generating report data..."):
                             report_html, df_combined, json_data = generate_comparison_report([ai_id1, ai_id2])
@@ -404,6 +419,7 @@ def main():
                             elif json_data is not None:
                                 # Step 2: Save JSON
                                 json_filepath = save_json_report(json_data)
+                                st.session_state.json_filepath = json_filepath
                                 st.success(f"✅ Report data generated and saved to {os.path.basename(json_filepath)}")
                                 
                                 # Step 3: Generate LLM analysis
@@ -414,39 +430,13 @@ def main():
                                         # Save analysis
                                         analysis_filepath = save_analysis(analysis)
                                         
-                                        # Display results
+                                        # Add initial analysis to chat history
+                                        st.session_state.chat_messages = [
+                                            {"role": "assistant", "content": analysis}
+                                        ]
+                                        
                                         st.success("✅ AI Analysis completed!")
-                                        
-                                        # Show metadata
-                                        st.markdown("### 📊 Report Metadata")
-                                        st.write(f"**Period IDs:** {ai_id1}, {ai_id2}")
-                                        st.write(f"**Model Used:** {model_option}")
-                                        st.write(f"**Generated:** {json_data['metadata']['generated_at']}")
-                                        
-                                        st.divider()
-                                        
-                                        # Show analysis
-                                        st.markdown("### 🧠 AI Analysis Results")
-                                        st.markdown(analysis)
-                                        
-                                        st.divider()
-                                        
-                                        # Download buttons
-                                        col1, col2 = st.columns(2)
-                                        with col1:
-                                            st.download_button(
-                                                label="📥 Download Analysis (TXT)",
-                                                data=analysis,
-                                                file_name=f"ai_analysis_{ai_id1}_vs_{ai_id2}.txt",
-                                                mime="text/plain"
-                                            )
-                                        with col2:
-                                            st.download_button(
-                                                label="📥 Download Report Data (JSON)",
-                                                data=json.dumps(json_data, indent=4),
-                                                file_name=f"report_data_{ai_id1}_vs_{ai_id2}.json",
-                                                mime="application/json"
-                                            )
+                                        st.rerun()  # Refresh to show chat interface
                                     else:
                                         st.error(f"❌ {analysis}")
                                         st.info("💡 Make sure Ollama is running and the selected model is installed. Run `ollama pull " + model_option + "` in your terminal.")
@@ -456,6 +446,96 @@ def main():
                         st.info("💡 Make sure Ollama is installed and running. Visit https://ollama.ai for installation instructions.")
             else:
                 st.warning("Please select two periods to compare.")
+        
+        # Display chat interface if analysis has been generated
+        if st.session_state.chat_messages and st.session_state.json_filepath and st.session_state.current_analysis_ids:
+            st.divider()
+            
+            # Show metadata
+            st.markdown("### 📊 Analysis Context")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.write(f"**Periods:** {st.session_state.current_analysis_ids[0]} vs {st.session_state.current_analysis_ids[1]}")
+            with col2:
+                st.write(f"**Model:** {st.session_state.current_model}")
+            with col3:
+                # Download buttons
+                if st.session_state.chat_messages:
+                    full_conversation = "\n\n---\n\n".join([
+                        f"{'AI Assistant' if msg['role'] == 'assistant' else 'You'}: {msg['content']}"
+                        for msg in st.session_state.chat_messages
+                    ])
+                    st.download_button(
+                        label="📥 Download Chat",
+                        data=full_conversation,
+                        file_name=f"ai_conversation_{st.session_state.current_analysis_ids[0]}_vs_{st.session_state.current_analysis_ids[1]}.txt",
+                        mime="text/plain",
+                        key="download_chat"
+                    )
+            
+            st.divider()
+            
+            # Chat interface
+            st.markdown("### 💬 Ask Follow-up Questions")
+            st.write("*Examples: What is the impact of these changes on mood? How do these patterns affect cognitive function? What about stress levels?*")
+            
+            # Display chat history
+            chat_container = st.container()
+            with chat_container:
+                for message in st.session_state.chat_messages:
+                    with st.chat_message(message["role"]):
+                        st.markdown(message["content"])
+            
+            # Chat input
+            user_question = st.chat_input("Ask a question about the analysis (e.g., 'How do these changes affect mood and psychology?')")
+            
+            if user_question:
+                # Add user message to chat
+                st.session_state.chat_messages.append({"role": "user", "content": user_question})
+                
+                # Display user message immediately
+                with st.chat_message("user"):
+                    st.markdown(user_question)
+                
+                # Get AI response
+                with st.chat_message("assistant"):
+                    with st.spinner("Thinking..."):
+                        # Build conversation history for context (exclude the system message)
+                        conversation_history = [
+                            {"role": msg["role"], "content": msg["content"]}
+                            for msg in st.session_state.chat_messages[:-1]  # Exclude the current question
+                        ]
+                        
+                        response = continue_conversation(
+                            user_question=user_question,
+                            json_filepath=st.session_state.json_filepath,
+                            conversation_history=conversation_history,
+                            model=st.session_state.current_model or "phi4:14b"
+                        )
+                        
+                        if not response.startswith("Error"):
+                            st.markdown(response)
+                            # Add assistant response to chat
+                            st.session_state.chat_messages.append({"role": "assistant", "content": response})
+                        else:
+                            st.error(response)
+            
+            # Additional options
+            st.divider()
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("� Start New Analysis", type="secondary"):
+                    st.session_state.chat_messages = []
+                    st.session_state.json_filepath = None
+                    st.session_state.current_analysis_ids = None
+                    st.session_state.current_model = None
+                    st.rerun()
+            with col2:
+                if st.button("�️ Clear Chat History", type="secondary"):
+                    # Keep only the initial analysis
+                    if st.session_state.chat_messages:
+                        st.session_state.chat_messages = [st.session_state.chat_messages[0]]
+                    st.rerun()
 
 if __name__ == "__main__":
     main()
