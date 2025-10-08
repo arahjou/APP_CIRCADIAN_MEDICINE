@@ -102,7 +102,7 @@ def generate_comparison_report(ids):
     df_combined.reset_index(inplace=True)
 
     if df_combined.empty:
-        return "No data found for the specified IDs.", None
+        return "No data found for the specified IDs.", None, None
 
     # 5) Create Tables
     # Table 1
@@ -226,4 +226,38 @@ def generate_comparison_report(ids):
             html_report += df.to_html(index=False, border=0)
     html_report += "</div></body></html>"
 
-    return html_report, df_combined
+    # 7) Create JSON structure for LLM analysis
+    json_data = {
+        "metadata": {
+            "report_type": "circadian_comparison",
+            "period_ids": ids,
+            "generated_at": datetime.now().isoformat(),
+            "header": header,
+            "summary": Quick_summary
+        },
+        "sections": {}
+    }
+    
+    for section_title, tables in report_sections.items():
+        json_data["sections"][section_title] = {}
+        for table_title, df in tables.items():
+            json_data["sections"][section_title][table_title] = df.to_dict('records')
+    
+    return html_report, df_combined, json_data
+
+
+def save_json_report(json_data, filename="circadian_report.json"):
+    """
+    Saves the JSON report data to a file.
+    
+    Args:
+        json_data: Dictionary containing the report data
+        filename: Name of the file to save (default: circadian_report.json)
+    
+    Returns:
+        str: Full path to the saved JSON file
+    """
+    filepath = os.path.join(os.getcwd(), filename)
+    with open(filepath, "w") as f:
+        json.dump(json_data, f, indent=4)
+    return filepath

@@ -3,6 +3,7 @@ import streamlit.components.v1 as components
 from datetime import datetime
 import sqlite3
 import os
+import json
 import pandas as pd
 # utils
 from tools.upload_file import upload_file, get_available_dates, filter_data_by_dates
@@ -25,7 +26,8 @@ from tools.light_IS_IV import compute_rolling_2day_is_iv_light
 from tools.light_L5_M10_RA import compute_daily_L5_M10_RA_light
 from tools.light_cosinor import fit_cosinor_daily_activity as fit_cosinor_daily_light
 from tools.light_CPD import calculate_cpd_light
-from tools.report_generator import generate_comparison_report
+from tools.report_generator import generate_comparison_report, save_json_report
+from tools.llm_conversation import analyze_circadian_report, save_analysis
 def main():
     # Initialize database
     db = ActigraphDB()
@@ -35,7 +37,7 @@ def main():
     st.write('Welcome to Our Data Analysis App! This app allows you to upload actigraph data files, perform comprehensive analyses, and compare results between different records. Please follow the steps below to get started.')
     
     # Create tabs for different functionalities
-    tab1, tab2 = st.tabs(["📊 New Analysis", "⚖️ Compare Records"])
+    tab1, tab2, tab3 = st.tabs(["📊 New Analysis", "⚖️ Compare Records", "🤖 AI Analysis"])
     
     with tab1:
         # Add input fields for ID, Description, and Date
@@ -359,13 +361,101 @@ def main():
                     st.error("Please select two different records to compare.")
                 else:
                     with st.spinner("Generating comparison report..."):
-                        report_html, _ = generate_comparison_report([id1, id2])
+                        report_html, _, _ = generate_comparison_report([id1, id2])
                         if report_html:
                             components.html(report_html, height=800, scrolling=True)
                         else:
                             st.error("Could not generate comparison report.")
             else:
                 st.warning("Please select two records to compare.")
+    
+    with tab3:
+        st.subheader("🤖 AI-Powered Report Analysis")
+        st.write("Generate an intelligent analysis of your circadian data comparing two periods using advanced language models.")
+        
+        records = db.get_all_records()
+        record_ids = [record['id'] for record in records]
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            ai_id1 = st.selectbox("Select first period ID", options=record_ids, key="ai_id1")
+        with col2:
+            ai_id2 = st.selectbox("Select second period ID", options=record_ids, key="ai_id2")
+        
+        # Model selection
+        model_option = st.selectbox(
+            "Select LLM Model",
+            options=["phi4:14b", "llama3.2", "gemma3:12b", "qwen3:8b"],
+            help="Choose the Ollama model for analysis"
+        )
+        
+        if st.button("🧠 Generate AI Analysis", type="primary"):
+            if ai_id1 and ai_id2:
+                if ai_id1 == ai_id2:
+                    st.error("Please select two different periods to compare.")
+                else:
+                    try:
+                        # Step 1: Generate report data
+                        with st.spinner("⏳ Generating report data..."):
+                            report_html, df_combined, json_data = generate_comparison_report([ai_id1, ai_id2])
+                            
+                            if isinstance(report_html, str) and "No data found" in report_html:
+                                st.error(report_html)
+                            elif json_data is not None:
+                                # Step 2: Save JSON
+                                json_filepath = save_json_report(json_data)
+                                st.success(f"✅ Report data generated and saved to {os.path.basename(json_filepath)}")
+                                
+                                # Step 3: Generate LLM analysis
+                                with st.spinner("🤖 Analyzing with AI (this may take 30-60 seconds)..."):
+                                    analysis = analyze_circadian_report(json_filepath, model=model_option)
+                                    
+                                    if analysis and not analysis.startswith("Error"):
+                                        # Save analysis
+                                        analysis_filepath = save_analysis(analysis)
+                                        
+                                        # Display results
+                                        st.success("✅ AI Analysis completed!")
+                                        
+                                        # Show metadata
+                                        st.markdown("### 📊 Report Metadata")
+                                        st.write(f"**Period IDs:** {ai_id1}, {ai_id2}")
+                                        st.write(f"**Model Used:** {model_option}")
+                                        st.write(f"**Generated:** {json_data['metadata']['generated_at']}")
+                                        
+                                        st.divider()
+                                        
+                                        # Show analysis
+                                        st.markdown("### 🧠 AI Analysis Results")
+                                        st.markdown(analysis)
+                                        
+                                        st.divider()
+                                        
+                                        # Download buttons
+                                        col1, col2 = st.columns(2)
+                                        with col1:
+                                            st.download_button(
+                                                label="📥 Download Analysis (TXT)",
+                                                data=analysis,
+                                                file_name=f"ai_analysis_{ai_id1}_vs_{ai_id2}.txt",
+                                                mime="text/plain"
+                                            )
+                                        with col2:
+                                            st.download_button(
+                                                label="📥 Download Report Data (JSON)",
+                                                data=json.dumps(json_data, indent=4),
+                                                file_name=f"report_data_{ai_id1}_vs_{ai_id2}.json",
+                                                mime="application/json"
+                                            )
+                                    else:
+                                        st.error(f"❌ {analysis}")
+                                        st.info("💡 Make sure Ollama is running and the selected model is installed. Run `ollama pull " + model_option + "` in your terminal.")
+                    
+                    except Exception as e:
+                        st.error(f"❌ An error occurred: {str(e)}")
+                        st.info("💡 Make sure Ollama is installed and running. Visit https://ollama.ai for installation instructions.")
+            else:
+                st.warning("Please select two periods to compare.")
 
 if __name__ == "__main__":
     main()

@@ -1,0 +1,156 @@
+{
+    "metadata": {
+        "report_type": "circadian_comparison",
+        "period_ids": [
+            "000001",
+            "000002"
+        ],
+        "generated_at": "2025-10-08T09:40:13.101289",
+        "header": "Report",
+        "summary": "This report provides a comprehensive analysis of the circadian rhythms and activity patterns of the subjects over the study period."
+    },
+    "sections": {
+        "Sleep and Circadian Health": {
+            "Circadian Rhythms and Sleep Metrics": [
+                {
+                    "Name": "CPD mid sleep",
+                    "Period1": 4.77,
+                    "Period2": 5.75,
+                    "Difference": 0.9800000000000004
+                },
+                {
+                    "Name": "SRI",
+                    "Period1": 79.72,
+                    "Period2": 42.93,
+                    "Difference": -36.79
+                },
+                {
+                    "Name": "Sleep Duration",
+                    "Period1": 6.0,
+                    "Period2": 19.0,
+                    "Difference": 13.0
+                }
+            ],
+            "Light Exposure Recommendations": [
+                {
+                    "Name": "\u2191 recom. during sleep",
+                    "Period1": 44.0,
+                    "Period2": 12.5,
+                    "Difference": -31.5
+                },
+                {
+                    "Name": "\u2191 recom. before sleep",
+                    "Period1": 4.0,
+                    "Period2": 47.0,
+                    "Difference": 43.0
+                },
+                {
+                    "Name": "\u2193 recom. after waking",
+                    "Period1": 139.0,
+                    "Period2": 226.0,
+                    "Difference": 87.0
+                }
+            ]
+        },
+        "Activity Patterns": {
+            "Interdaily Stability (IS) and Intradaily Variability (IV)": [
+                {
+                    "Name": "IS",
+                    "Period1": 0.37,
+                    "Period2": 0.26,
+                    "Difference": -0.10999999999999999
+                },
+                {
+                    "Name": "IV",
+                    "Period1": 0.39,
+                    "Period2": 0.51,
+                    "Difference": 0.12
+                }
+            ],
+            "Most Active 10h (M10), Least Active 5h (L5), and Relative Amplitude (RA)": [
+                {
+                    "Name": "M10",
+                    "Period1": 48.84,
+                    "Period2": 36.83,
+                    "Difference": -12.010000000000005
+                },
+                {
+                    "Name": "L5",
+                    "Period1": 9.31,
+                    "Period2": 2.05,
+                    "Difference": -7.260000000000001
+                },
+                {
+                    "Name": "RA",
+                    "Period1": 0.75,
+                    "Period2": 0.85,
+                    "Difference": 0.09999999999999998
+                }
+            ],
+            "Cosinor Analysis (Mesor and Acrophase)": [
+                {
+                    "Name": "Mesor",
+                    "Period1": 36.89,
+                    "Period2": 31.78,
+                    "Difference": -5.109999999999999
+                },
+                {
+                    "Name": "CPD2",
+                    "Period1": 3.81,
+                    "Period2": 0.67,
+                    "Difference": -3.14
+                }
+            ]
+        },
+        "Light Exposure Patterns": {
+            "Light Exposure IS and IV": [
+                {
+                    "Name": "IS",
+                    "Period1": 0.27,
+                    "Period2": 0.09,
+                    "Difference": -0.18000000000000002
+                },
+                {
+                    "Name": "IV",
+                    "Period1": 0.55,
+                    "Period2": 0.76,
+                    "Difference": 0.20999999999999996
+                }
+            ],
+            "Light Exposure L5, M10, and RA": [
+                {
+                    "Name": "M10",
+                    "Period1": 129.16,
+                    "Period2": 234.31,
+                    "Difference": 105.15
+                },
+                {
+                    "Name": "L5",
+                    "Period1": 2.16,
+                    "Period2": 0.0,
+                    "Difference": -2.16
+                },
+                {
+                    "Name": "RA",
+                    "Period1": 0.98,
+                    "Period2": 1.0,
+                    "Difference": 0.020000000000000018
+                }
+            ],
+            "Light Exposure Cosinor Analysis": [
+                {
+                    "Name": "Mesor",
+                    "Period1": 84.04,
+                    "Period2": 181.53,
+                    "Difference": 97.49
+                },
+                {
+                    "Name": "CPD3",
+                    "Period1": 0.27,
+                    "Period2": 1.11,
+                    "Difference": 0.8400000000000001
+                }
+            ]
+        }
+    }
+}
