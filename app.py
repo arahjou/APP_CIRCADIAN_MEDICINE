@@ -28,7 +28,56 @@ from tools.light_cosinor import fit_cosinor_daily_activity as fit_cosinor_daily_
 from tools.light_CPD import calculate_cpd_light
 from tools.report_generator import generate_comparison_report, save_json_report
 from tools.llm_conversation import analyze_circadian_report, save_analysis, continue_conversation
+
+# --- USER AUTHENTICATION ---
+
+# In a real app, you'd have a database and hashed passwords
+USERS = {
+    "user1": "password123",
+    "user2": "password456"
+}
+
+def check_login(username, password):
+    """Returns True if the username and password are correct."""
+    return username in USERS and USERS[username] == password
+
 def main():
+    # Initialize session state if not already done
+    if 'logged_in' not in st.session_state:
+        st.session_state['logged_in'] = False
+        st.session_state['username'] = ''
+    
+    # --- LOGIN FORM ---
+    if not st.session_state['logged_in']:
+        st.set_page_config(page_title="Login - Circadian Medicine App", layout="centered")
+        st.title("🔐 Login to Circadian Medicine App")
+        st.markdown("---")
+
+        with st.form("login_form"):
+            username = st.text_input("Username").lower()
+            password = st.text_input("Password", type="password")
+            submitted = st.form_submit_button("Login", type="primary")
+
+            if submitted:
+                if check_login(username, password):
+                    st.session_state['logged_in'] = True
+                    st.session_state['username'] = username
+                    st.rerun()  # Rerun the script to show the main app
+                else:
+                    st.error("😕 Incorrect username or password.")
+        return  # Exit if not logged in
+    
+    # --- MAIN APPLICATION (Only accessible after login) ---
+    st.set_page_config(page_title="Circadian Medicine Analysis", page_icon="🔬", layout="wide")
+    
+    # Display a sidebar with user info and logout button
+    with st.sidebar:
+        st.success(f"Welcome, **{st.session_state['username']}**! 👋")
+        if st.button("Log Out", type="primary"):
+            st.session_state['logged_in'] = False
+            st.session_state['username'] = ''
+            st.rerun()
+    
     # Initialize database
     db = ActigraphDB()
     
