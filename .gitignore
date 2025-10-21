@@ -205,3 +205,44 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Project-specific
+# Database files
+Actigraph_record.db
+*.db
+*.sqlite3
+
+# Generated reports
+circadian_report.json
+enhanced_circadian_report.html
+llm_analysis.txt
+*.html
+*.json
+
+# Data files (exclude actual patient data)
+data/*.csv
+data/*.txt
+!data/README.md
+
+# Generated images
+image/*.png
+image/*.jpg
+!image/README.md
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Thumbnails
+._*
+
+# Streamlit
+.streamlit/
+
+# Backup files
+*~
+*.bak
+*.swp
+*.swo
+*_backup.*
