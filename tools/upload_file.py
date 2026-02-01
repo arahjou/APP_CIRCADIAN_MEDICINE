@@ -2,7 +2,7 @@
 def upload_file(upload_file):
     import pandas as pd
     if upload_file is not None:
-        df = pd.read_table(upload_file, skiprows=30, header=0, sep=';')
+        df = pd.read_table(upload_file, skiprows=32, header=0, sep=';')
         df['DATE/TIME'] = pd.to_datetime(
             df['DATE/TIME'],
             format='%d/%m/%Y %H:%M:%S',

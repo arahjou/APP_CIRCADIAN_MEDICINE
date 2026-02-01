@@ -29,6 +29,88 @@ from tools.light_CPD import calculate_cpd_light
 from tools.report_generator import generate_comparison_report, save_json_report
 from tools.llm_conversation import analyze_circadian_report, save_analysis, continue_conversation
 
+
+AI_ANALYSIS_DIRNAME = "ai_analyses"
+
+
+def _ensure_dir(path: str) -> None:
+    os.makedirs(path, exist_ok=True)
+
+
+def _safe_filename_part(value: str) -> str:
+    if value is None:
+        return "unknown"
+    value = str(value).strip()
+    if not value:
+        return "unknown"
+    return "".join(ch if ch.isalnum() or ch in ("-", "_", ".") else "_" for ch in value)
+
+
+def _save_ai_analysis_snapshot(
+    *,
+    analysis_text: str,
+    username: str,
+    period_id_1: str,
+    period_id_2: str,
+    model: str,
+    json_filepath: str,
+) -> dict:
+    base_dir = os.path.join(os.getcwd(), AI_ANALYSIS_DIRNAME)
+    _ensure_dir(base_dir)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    base_name = (
+        f"{_safe_filename_part(username)}_"
+        f"{_safe_filename_part(period_id_1)}_vs_{_safe_filename_part(period_id_2)}_"
+        f"{_safe_filename_part(model)}_{timestamp}"
+    )
+
+    txt_relpath = os.path.join(AI_ANALYSIS_DIRNAME, f"{base_name}.txt")
+    meta_relpath = os.path.join(AI_ANALYSIS_DIRNAME, f"{base_name}.meta.json")
+
+    txt_abspath = save_analysis(analysis_text, filename=txt_relpath)
+    meta_abspath = os.path.join(os.getcwd(), meta_relpath)
+    meta = {
+        "username": username,
+        "period_id_1": period_id_1,
+        "period_id_2": period_id_2,
+        "model": model,
+        "json_filepath": json_filepath,
+        "created_at": datetime.now().isoformat(timespec="seconds"),
+        "analysis_txt": txt_abspath,
+    }
+    with open(meta_abspath, "w") as f:
+        json.dump(meta, f, indent=2)
+
+    return meta
+
+
+def _load_previous_ai_analyses_for_user(username: str) -> list[dict]:
+    base_dir = os.path.join(os.getcwd(), AI_ANALYSIS_DIRNAME)
+    if not os.path.isdir(base_dir):
+        return []
+
+    entries: list[dict] = []
+    for name in sorted(os.listdir(base_dir), reverse=True):
+        if not name.endswith(".meta.json"):
+            continue
+        path = os.path.join(base_dir, name)
+        try:
+            with open(path, "r") as f:
+                meta = json.load(f)
+            if meta.get("username") != username:
+                continue
+            entries.append(meta)
+        except Exception:
+            # Skip malformed metadata
+            continue
+
+    def _sort_key(m: dict) -> str:
+        return str(m.get("created_at") or "")
+
+    entries.sort(key=_sort_key, reverse=True)
+    return entries
+
 # --- USER AUTHENTICATION ---
 
 # In a real app, you'd have a database and hashed passwords
@@ -86,7 +168,12 @@ def main():
     st.write('Welcome to Our Data Analysis App! This app allows you to upload actigraph data files, perform comprehensive analyses, and compare results between different records. Please follow the steps below to get started.')
     
     # Create tabs for different functionalities
-    tab1, tab2, tab3 = st.tabs(["📊 New Analysis", "⚖️ Compare Records", "🤖 AI Analysis"])
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "📊 New Analysis",
+        "📁 Previous Analyses",
+        "⚖️ Compare Records",
+        "🤖 AI Analysis",
+    ])
     
     with tab1:
         # Add input fields for ID, Description, and Date
@@ -392,7 +479,7 @@ def main():
     else:
         st.info("Please upload a file to begin analysis.")
     
-    with tab2:
+    with tab3:
         st.subheader("⚖️ Compare Two Analysis Records")
         
         records = db.get_all_records()
@@ -418,7 +505,120 @@ def main():
             else:
                 st.warning("Please select two records to compare.")
     
-    with tab3:
+    with tab2:
+        st.subheader("📁 Previous Analyses")
+        st.write("Select an Analysis ID to view saved results from the database (no new analysis is run).")
+
+        records = db.get_all_records()
+        record_ids = [record['id'] for record in records]
+        if not record_ids:
+            st.info("No analysis records found yet. Run a New Analysis first.")
+        else:
+            selected_id = st.selectbox("Select analysis ID", options=record_ids, key="previous_analysis_id")
+            selected_id_str = str(selected_id) if selected_id is not None else ""
+
+            record = db.get_record_by_id(selected_id_str) if selected_id_str else None
+            if not record:
+                st.error("Could not load this record from the database.")
+            else:
+                st.markdown("### 📌 Record Details")
+                c1, c2, c3 = st.columns(3)
+                with c1:
+                    st.write(f"**ID:** {record.get('id', 'Unknown')}")
+                    st.write(f"**Description:** {record.get('description', 'Unknown')}")
+                with c2:
+                    st.write(f"**Created:** {record.get('created_at', 'Unknown')}")
+                    st.write(f"**Date:** {record.get('date', 'Unknown')}")
+                with c3:
+                    st.write(f"**File:** {record.get('file_name', 'Unknown')}")
+
+                selected_dates_raw = record.get("selected_dates")
+                try:
+                    selected_dates = json.loads(selected_dates_raw) if selected_dates_raw else None
+                except Exception:
+                    selected_dates = None
+                if selected_dates:
+                    st.write(f"**Selected dates:** {', '.join(map(str, selected_dates))}")
+
+                st.divider()
+
+                def _show_df(table_name: str, analysis_type: str, title: str, preferred_cols: list[str] | None = None):
+                    st.subheader(title)
+                    df_res = db.get_analysis_results_as_dataframe(selected_id_str, table_name, analysis_type)
+                    if df_res is None or df_res.empty:
+                        st.write("No saved results found.")
+                        return
+
+                    if preferred_cols:
+                        cols = [c for c in preferred_cols if c in df_res.columns]
+                        if cols:
+                            st.dataframe(df_res[cols])
+                            return
+                    st.dataframe(df_res)
+
+                # Sleep + light exposure (special-case payload)
+                st.subheader("Sleep and Light Exposure Analysis")
+                sleep_rows = db.get_analysis_results(selected_id_str, "sleep_analysis")
+                sle = next((r for r in sleep_rows if r.get("analysis_type") == "sleep_light_exposure"), None)
+                if not sle:
+                    st.write("No saved sleep/light exposure results found.")
+                else:
+                    payload = sle.get("results")
+                    if isinstance(payload, dict):
+                        for key, label in [
+                            ("metric1", "Minutes of light exposure (> 1 lux) during sleep by date"),
+                            ("metric2", "Minutes of bright light (> 10 lux) in the 3 hours before sleep by date"),
+                            ("metric3", "Minutes of non-bright light (< 250 lux) in the 3 hours after waking by date"),
+                        ]:
+                            st.write(f"**{label}:**")
+                            val = payload.get(key)
+                            if isinstance(val, list):
+                                st.dataframe(pd.DataFrame(val))
+                            else:
+                                st.write(val if val is not None else "Unknown")
+                    else:
+                        st.write(payload)
+
+                _show_df("sleep_analysis", "sleep_periods", "Sleep Periods Analysis")
+                _show_df(
+                    "sleep_analysis",
+                    "cpd_mid_sleep",
+                    "Circadian Phase Dispersion (CPD) of Mid-Sleep",
+                    preferred_cols=[
+                        "mid_sleep_DATE",
+                        "Mid_sleep_Time",
+                        "cpd_hours",
+                        "mean_midpoint_hours",
+                        "median_midpoint_hours",
+                    ],
+                )
+                _show_df("sleep_analysis", "sri_sleep", "Sleep Regularity Index (SRI)")
+
+                st.divider()
+
+                _show_df("activity_analysis", "activity_is_iv", "Activity: Interdaily Stability (IS) and Intradaily Variability (IV)")
+                _show_df("activity_analysis", "activity_l5_m10_ra", "Activity: L5, M10, and Relative Amplitude (RA)")
+                _show_df("activity_analysis", "activity_cosinor", "Activity: Daily Cosinor Fit")
+                _show_df(
+                    "activity_analysis",
+                    "cpd_activity_acrophase",
+                    "Activity: CPD of Acrophase",
+                    preferred_cols=["date", "cpd_hours", "deviation_from_mean_hours", "deviation_from_prev_hours"],
+                )
+
+                st.divider()
+
+                _show_df("light_analysis", "light_is_iv", "Light: Interdaily Stability (IS) and Intradaily Variability (IV)")
+                _show_df("light_analysis", "light_l5_m10_ra", "Light: L5, M10, and Relative Amplitude (RA)")
+                _show_df("light_analysis", "light_cosinor", "Light: Daily Cosinor Fit")
+                _show_df(
+                    "light_analysis",
+                    "cpd_light_acrophase",
+                    "Light: CPD of Acrophase",
+                    preferred_cols=["date", "cpd_hours", "deviation_from_mean_hours", "deviation_from_prev_hours"],
+                )
+
+    with tab4:
         st.subheader("🤖 AI-Powered Report Analysis")
         st.write("Generate an intelligent analysis of your circadian data comparing two periods using advanced language models.")
         
@@ -476,8 +676,15 @@ def main():
                                     analysis = analyze_circadian_report(json_filepath, model=model_option)
                                     
                                     if analysis and not analysis.startswith("Error"):
-                                        # Save analysis
-                                        analysis_filepath = save_analysis(analysis)
+                                        # Save analysis (persist per-user so it can be reopened later)
+                                        _save_ai_analysis_snapshot(
+                                            analysis_text=analysis,
+                                            username=st.session_state.get("username") or "unknown",
+                                            period_id_1=ai_id1,
+                                            period_id_2=ai_id2,
+                                            model=model_option,
+                                            json_filepath=json_filepath,
+                                        )
                                         
                                         # Add initial analysis to chat history
                                         st.session_state.chat_messages = [
