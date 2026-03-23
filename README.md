@@ -199,7 +199,7 @@ ai_analyses/            # Saved AI report snapshots
 If you use this software in your research, please cite:
 
 ```
-[Author Name] (2026). Circadian Medicine Analysis Suite (Version 1.0) [Computer software].
+Ali Rahjouei (2026). Circadian Medicine Analysis Suite (Version 1.0) [Computer software].
 Charité – Universitätsmedizin Berlin. https://doi.org/10.5281/zenodo.XXXXXXX
 ```
 
@@ -215,13 +215,13 @@ Contributions are welcome. Please open an issue to discuss proposed changes befo
 
 ## License
 
-[MIT License](LICENSE) — © 2026 [Author Name], Charité – Universitätsmedizin Berlin.
+[MIT License](LICENSE) — © 2026 Ali Rahjouei, Charité – Universitätsmedizin Berlin.
 
 ---
 
 ## Acknowledgements
 
-Developed at the Circadian Medicine Lab, Charité – Universitätsmedizin Berlin.  
+Developed at the Circadian Medicine Group, Charité – Universitätsmedizin Berlin.  
 Actigraphy data acquired with [device name, e.g., Actiwatch / MotionWatch].  
 LLM inference powered by [Ollama](https://ollama.com).  
 Literature retrieval via [NCBI PubMed E-utilities](https://www.ncbi.nlm.nih.gov/books/NBK25499/).

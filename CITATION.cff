@@ -9,9 +9,9 @@ abstract: >
   domains, and generates literature-grounded clinical reports via a local 5-agent
   LLM pipeline using LangGraph and Ollama.
 authors:
-  - family-names: "[Family Name]"
-    given-names: "[Given Name]"
-    orcid: "https://orcid.org/0000-0000-0000-0000"
+  - family-names: "Rahjouei"
+    given-names: "Ali"
+    orcid: "https://orcid.org/0000-0003-3973-6333"
     affiliation: "Charité – Universitätsmedizin Berlin, Circadian Medicine Lab"
 repository-code: "https://github.com/<your-org>/circadian-medicine-suite"
 url: "https://github.com/<your-org>/circadian-medicine-suite"
