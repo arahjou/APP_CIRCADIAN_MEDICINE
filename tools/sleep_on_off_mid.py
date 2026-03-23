@@ -9,7 +9,8 @@ def analyze_sleep_periods(data):
     # =============================================================================
     # sleep state analysis
     # Calculate the rolling average for PIMn
-    data['PIMn_avg'] = data['PIMn'].rolling(window=100).mean()
+    # min_periods=1 ensures sleep state is defined from the first sample
+    data['PIMn_avg'] = data['PIMn'].rolling(window=100, min_periods=1).mean()
 
     # Define sleep state based on the average PIMn
     data['Sleep_State'] = data['PIMn_avg'].apply(lambda x: 1 if x < 6 else 0)

@@ -11,6 +11,8 @@ from typing import Dict, Any, List, Optional
 import os
 
 class ActigraphDB:
+    _ALLOWED_TABLES = frozenset({"sleep_analysis", "activity_analysis", "light_analysis"})
+
     def __init__(self, db_path: str = "Actigraph_record.db"):
         """Initialize database connection and create tables if they don't exist"""
         self.db_path = db_path
@@ -63,8 +65,44 @@ class ActigraphDB:
                 )
             ''')
             
+            # Migrate existing databases — add anamnesis column if it doesn't exist yet
+            try:
+                cursor.execute("ALTER TABLE analysis_records ADD COLUMN anamnesis TEXT")
+            except sqlite3.OperationalError:
+                pass  # column already exists
+
             conn.commit()
     
+    def save_anamnesis(self, record_id: str, text: str) -> bool:
+        """Save or update the anamnesis text for a record."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute(
+                    "UPDATE analysis_records SET anamnesis = ? WHERE id = ?",
+                    (text.strip(), record_id),
+                )
+                conn.commit()
+                return True
+        except Exception as e:
+            print(f"Error saving anamnesis: {e}")
+            return False
+
+    def get_anamnesis(self, record_id: str) -> str:
+        """Return the anamnesis text for a record, or empty string if none."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT anamnesis FROM analysis_records WHERE id = ?", (record_id,)
+                )
+                row = cursor.fetchone()
+                if row and row[0]:
+                    return row[0]
+                return ""
+        except Exception as e:
+            print(f"Error retrieving anamnesis: {e}")
+            return ""
+
     def save_analysis_record(self, analysis_id: str, description: str, date: str, 
                            file_name: Optional[str] = None, selected_dates: Optional[List[str]] = None) -> bool:
         """Save a new analysis record"""
@@ -103,8 +141,15 @@ class ActigraphDB:
         """Save light analysis results"""
         return self._save_analysis_results("light_analysis", record_id, analysis_type, results)
     
+    def _safe_table(self, table_name: str) -> str:
+        """Validate table_name against the allowed list to prevent SQL injection."""
+        if table_name not in self._ALLOWED_TABLES:
+            raise ValueError(f"Unknown table '{table_name}'. Allowed: {sorted(self._ALLOWED_TABLES)}")
+        return table_name
+
     def _save_analysis_results(self, table_name: str, record_id: str, analysis_type: str, results: Any) -> bool:
         """Helper method to save analysis results to specific table"""
+        table_name = self._safe_table(table_name)
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
@@ -158,6 +203,7 @@ class ActigraphDB:
     
     def get_analysis_results(self, record_id: str, table_name: str) -> List[Dict]:
         """Get analysis results for a specific record from a specific table"""
+        table_name = self._safe_table(table_name)
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
@@ -197,6 +243,7 @@ class ActigraphDB:
     
     def get_analysis_results_as_dataframe(self, record_id: str, table_name: str, analysis_type: str) -> Optional[pd.DataFrame]:
         """Get specific analysis results as a pandas DataFrame"""
+        table_name = self._safe_table(table_name)
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()

@@ -2,8 +2,11 @@ def activity_plotter(df_subset):
     import matplotlib.pyplot as plt
     import pandas as pd
 
-    # Calculate the rolling average for PIMn
-    df_subset['PIMn_avg'] = df_subset['PIMn'].rolling(window=100).mean()
+    # Work on a copy to avoid mutating the caller's DataFrame
+    df_subset = df_subset.copy()
+
+    # Calculate the rolling average for PIMn (min_periods=1 avoids NaN at start)
+    df_subset['PIMn_avg'] = df_subset['PIMn'].rolling(window=100, min_periods=1).mean()
 
     # Define sleep state based on the average PIMn
     df_subset['Sleep_State'] = df_subset['PIMn_avg'].apply(lambda x: 1 if x < 6 else 0)

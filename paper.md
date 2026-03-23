@@ -1,0 +1,102 @@
+---
+title: 'Circadian Medicine Analysis Suite: A Privacy-Preserving Web Application for Actigraphy-Based Circadian Analysis with AI-Augmented Clinical Reporting'
+tags:
+  - Python
+  - circadian medicine
+  - actigraphy
+  - sleep analysis
+  - large language models
+  - clinical decision support
+authors:
+  - name: "Ali Rahjouei"
+    orcid: 0000-0003-3973-6333
+    affiliation: 1
+affiliations:
+  - name: Charité – Universitätsmedizin Berlin, Department of Anesthesiology and Intensive Care Medicine | CCM | CVK, Circadian Medicine Group, Berlin, Germany
+    index: 1
+date: 23 March 2026
+bibliography: paper.bib
+---
+
+# Summary
+
+Wrist actigraphy is a widely used ambulatory method for assessing sleep-wake patterns and circadian rhythm disturbances in clinical and research settings [@Smith2018]. However, translating raw actigraphy recordings into clinically interpretable circadian profiles typically requires combining multiple analytical approaches — including nonparametric rest-activity analysis, cosinor modelling, and sleep-wake scoring — together with the expertise needed to contextualise those metrics against the biomedical literature.
+
+**Circadian Medicine Analysis Suite** is an open-source Python/Streamlit web application that addresses this gap. It provides a unified, browser-based interface for uploading actigraphy data, computing a broad battery of established circadian metrics, comparing recordings across time periods, and generating structured clinical reports grounded in automatically retrieved PubMed literature, while keeping raw patient data, identifiers, and computed metrics on the local machine. Only de-identified literature-search queries and PubMed retrieval requests are sent to external services.
+
+# Statement of Need
+
+Standard research tools for actigraphy analysis — such as Actiware (Philips Respironics), GGIR [@Migueles2019], pyActigraphy [@Hammad2021], and nparACT [@Blume2016] — provide important subsets of the required functionality, but generally do not combine activity, sleep, and melanopic light exposure analysis, period-to-period comparison, and locally executed literature-grounded reporting in a single workflow.
+
+The emergence of locally deployable large language models (LLMs) via frameworks such as Ollama [@OllamaSoftware] creates a new opportunity for privacy-preserving AI-assisted synthesis of clinical findings. Existing LLM-based clinical tools often depend on remote APIs or institution-specific infrastructure, which can complicate deployment in privacy-sensitive clinical and research settings.
+
+Circadian Medicine Analysis Suite fills this gap by combining:
+
+- **A broad metric battery** spanning activity, sleep, and melanopic light exposure
+- **A privacy-preserving 5-agent AI pipeline, with an optional sixth symptom-metric linker**, that synthesises metrics with literature evidence using local compute and de-identified search queries
+- **A low-barrier web interface** (Streamlit) deployable on a standard research workstation, requiring no specialist IT infrastructure
+
+The tool is aimed at clinician-researchers and postdoctoral scientists who require rigorous, reproducible circadian profiling without sacrificing data security or incurring substantial engineering overhead.
+
+# Implementation
+
+## Input Data
+
+The application ingests minute-resolution wrist actigraphy CSV files exported from compatible devices. Required columns are: `DATE/TIME`, `PIMn` (device-exported activity counts), `MELANOPIC EDI` (melanopic equivalent daylight illuminance, lux [@CIE2018; @Lucas2014]), `WHITE LIGHT (LUX)`, and `SLEEP/WAKE`. Data are stored in a local SQLite database (`Actigraph_record.db`) keyed by user-defined participant IDs and recording periods.
+
+## Circadian & Sleep Metrics
+
+All metrics are computed in Python using `numpy`, `scipy`, and `pandas`.
+
+**Activity domain:**
+
+- *Interdaily Stability (IS) and Intradaily Variability (IV)* — nonparametric measures of day-to-day rhythm consistency and within-day fragmentation, computed over rolling 2-day windows [@VanSomeren1999].
+- *L5, M10, Relative Amplitude (RA)* — the least-active 5-hour period, most-active 10-hour period, and their relative amplitude, anchored to clock noon [@VanSomeren1999].
+- *Cosinor analysis* — daily nonlinear least-squares fitting of the cosine function $y = M + A \cos\!\left(\frac{2\pi t}{24} - \phi\right)$ to yield mesor ($M$), amplitude ($A$), and acrophase ($\phi$) per recording day [@Refinetti2007].
+- *Composite phase deviation (CPD)* — identification of abrupt shifts in the phase of the rhythm [@Fischer2016].
+
+**Sleep domain:**
+
+- *Sleep onset, offset, and mid-sleep time* — extracted from the `SLEEP/WAKE` time series, with gap-filling for brief within-sleep awakenings.
+- *Sleep Regularity Index (SRI)* — the probability that sleep-wake state at time $t$ on one day matches state at the same time on the next, averaged over all day pairs in a sliding window [@Phillips2017].
+- *Circular CPD on mid-sleep phase* — application of circular statistics to detect shifts in the timing of the mid-sleep point, using noon-centred angles and a combined mean-deviation/day-to-day-deviation score, conceptually related to composite phase deviation [@Fischer2016].
+- *Sleep-light exposure* — categorical analysis of melanopic EDI levels during three-hour windows around primary sleep onset and offset events.
+
+**Light domain:**
+
+An equivalent suite (IS, IV, L5, M10, RA, cosinor, CPD) is computed on the melanopic EDI channel, enabling direct comparison of photic input rhythmicity with activity rhythmicity.
+
+## Multi-Period Comparison
+
+Users can select any two database records and generate a structured JSON comparison report listing each metric by domain alongside the inter-period difference ($\Delta$). This supports within-subject longitudinal designs (for example, baseline versus intervention) as well as between-condition comparisons.
+
+## AI-Augmented Clinical Reporting
+
+A locally executed 5-agent pipeline, with an optional sixth symptom-metric linker, is implemented with LangGraph [@LangGraphSoftware] and Ollama [@OllamaSoftware]:
+
+| Agent | Role | Implementation |
+|-------|------|----------------|
+| 1 — Data Summariser | Condenses the metric table into a clinical narrative (~400 words) | Local Ollama LLM |
+| 2 — Keyword Extractor | Generates PubMed search queries; validates and cleans output; when anamnesis is present, generates a mixed set of 3 metric-focused and 2 symptom-plus-metric queries | Local Ollama LLM |
+| 3 — Evidence Retriever | Retrieves abstracts via NCBI PubMed E-utilities and filters out off-topic results with a fast local LLM relevance pass | NCBI E-utilities + Local Ollama LLM |
+| 4 — Literature Synthesiser | Links retrieved evidence to individual metric findings | Local Ollama LLM |
+| 5 — Report Writer | Produces a structured narrative in the chosen register; includes a "Symptom-Metric Correlation" section when Agent 6 is active; concludes with a numbered PubMed reference list | Local Ollama LLM |
+| 6 — Symptom-Metric Linker *(optional)* | When a patient anamnesis is provided for Doctor or Expert output, maps each reported symptom to the most relevant metric change ($\Delta$) and supporting PubMed abstract; explicitly flags symptoms with no literature match for further workup | Local Ollama LLM |
+
+The pipeline supports three audience registers: *expert* (full chronobiology terminology), *doctor* (clinical language), and *layperson* (plain language). For the Doctor and Expert registers, the clinician may optionally enter a free-text patient anamnesis before running the pipeline. This activates Agent 6 (Symptom-Metric Linker), a conditional node in the LangGraph graph, which cross-references each reported symptom against the metric changes and retrieved abstracts, producing a structured table. Symptoms lacking supporting literature are explicitly flagged to prompt further clinical workup.
+
+Only de-identified literature-search queries and PubMed retrieval requests leave the local machine; raw actigraphy, computed metrics, participant identifiers, and full anamnesis text remain local. Literature retrieval uses the NCBI Entrez E-utilities API [@NCBIEutilities]. Patient anamnesis is stored only in the local SQLite database. Every report concludes with a numbered reference list of the retrieved PubMed articles (PMID and PubMed URL), enabling direct traceability from reported evidence to primary literature. Reports are saved to disk in both plain text and structured JSON with provenance metadata.
+
+## Authentication and Security
+
+Multi-user access is controlled via PBKDF2-HMAC-SHA256 password hashing with a per-user random 16-byte salt and constant-time comparison. Passwords are never stored in plaintext.
+
+# Availability
+
+The software is available at [https://github.com/<your-org>/circadian-medicine-suite](https://github.com/<your-org>/circadian-medicine-suite) under the MIT License. It requires Python \>= 3.10, a local Ollama installation, and a standard research workstation. A complete installation guide and sample anonymised data are provided in the repository.
+
+# Acknowledgements
+
+Developed at the Circadian Medicine Lab, Charité – Universitätsmedizin Berlin. The author thanks [colleagues / PI name] for scientific guidance and data collection support. LLM inference uses Ollama [@OllamaSoftware]; literature retrieval uses the NCBI Entrez E-utilities API [@NCBIEutilities].
+
+# References

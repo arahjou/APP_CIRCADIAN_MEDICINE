@@ -1,6 +1,29 @@
 import pandas as pd
 import numpy as np
-import pycircstat as circ  # pip install pycircstat
+
+
+# ── inline circular-statistics helpers (no pycircstat dependency) ──────────────
+def _circ_mean(alpha: np.ndarray) -> float:
+    """Circular mean of angles (radians), ignores NaN."""
+    valid = alpha[~np.isnan(alpha)]
+    return np.arctan2(np.sum(np.sin(valid)), np.sum(np.cos(valid)))
+
+
+def _circ_median(alpha: np.ndarray) -> float:
+    """Circular median (brute-force over observed angles), ignores NaN."""
+    valid = alpha[~np.isnan(alpha)]
+    if valid.size == 0:
+        return np.nan
+    total_dev = np.array(
+        [np.sum(np.abs(_circ_diff(valid, m))) for m in valid]
+    )
+    return valid[np.argmin(total_dev)]
+
+
+def _circ_diff(a: np.ndarray, b) -> np.ndarray:
+    """Signed circular difference a − b, wrapped to (−π, π]. Both a and b may be arrays."""
+    return (np.asarray(a, dtype=float) - np.asarray(b, dtype=float) + np.pi) % (2 * np.pi) - np.pi
+
 
 def calculate_cpd_light(
     df: pd.DataFrame,
@@ -53,20 +76,20 @@ def calculate_cpd_light(
         cpd_hours = np.full(len(out), np.nan)
     else:
         # Circular mean & median using only valid values
-        mean_angle = circ.mean(midpoint_radians[valid])
-        median_angle = circ.median(midpoint_radians[valid])
+        mean_angle = _circ_mean(midpoint_radians[valid])
+        median_angle = _circ_median(midpoint_radians[valid])
 
         mean_midpoint_hours = np.mod(mean_angle / two_pi_over_24, 24)
         median_midpoint_hours = np.mod(median_angle / two_pi_over_24, 24)
 
         # Deviations (works with NaNs; invalid positions will become NaN)
-        deviation_from_mean = circ.cdiff(midpoint_radians, mean_angle)
+        deviation_from_mean = _circ_diff(midpoint_radians, mean_angle)
 
         prev = midpoint_radians[:-1]
         curr = midpoint_radians[1:]
         dev_prev_vec = np.full(len(out) - 1, np.nan)
         mask_pair = ~np.isnan(curr) & ~np.isnan(prev)
-        dev_prev_vec[mask_pair] = circ.cdiff(curr[mask_pair], prev[mask_pair])
+        dev_prev_vec[mask_pair] = _circ_diff(curr[mask_pair], prev[mask_pair])
         deviation_from_prev = np.concatenate(([np.nan], dev_prev_vec))
 
         deviation_from_mean_hours = deviation_from_mean / two_pi_over_24

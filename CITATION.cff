@@ -1,0 +1,38 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below."
+type: software
+title: "Circadian Medicine Analysis Suite"
+abstract: >
+  A privacy-preserving, AI-augmented web application for clinical circadian rhythm
+  and sleep-wake analysis from wearable actigraphy data. Computes validated metrics
+  (IS, IV, L5/M10/RA, Cosinor, SRI, CPD) across activity, sleep, and light-exposure
+  domains, and generates literature-grounded clinical reports via a local 5-agent
+  LLM pipeline using LangGraph and Ollama.
+authors:
+  - family-names: "[Family Name]"
+    given-names: "[Given Name]"
+    orcid: "https://orcid.org/0000-0000-0000-0000"
+    affiliation: "Charité – Universitätsmedizin Berlin, Circadian Medicine Lab"
+repository-code: "https://github.com/<your-org>/circadian-medicine-suite"
+url: "https://github.com/<your-org>/circadian-medicine-suite"
+license: MIT
+version: "1.0.0"
+date-released: "2026-03-22"
+keywords:
+  - circadian medicine
+  - actigraphy
+  - sleep analysis
+  - circadian rhythm
+  - interdaily stability
+  - sleep regularity index
+  - cosinor analysis
+  - melanopic EDI
+  - large language models
+  - LangGraph
+  - Ollama
+  - clinical decision support
+  - wearable sensors
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.XXXXXXX"
+    description: "Zenodo archive DOI (update after archiving)"

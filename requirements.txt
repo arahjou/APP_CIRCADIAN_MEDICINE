@@ -5,11 +5,11 @@ numpy>=1.24.0
 scipy>=1.11.0
 matplotlib>=3.7.0
 
-# AI/LLM features
+# AI/LLM features — multi-agent pipeline
 ollama>=0.1.0
-
-# Database
-sqlite3  # Built-in with Python
+langgraph>=0.2.0
+langchain-ollama>=0.1.0
+langchain-core>=0.2.0
 
 # Optional: For better performance
 pyarrow>=14.0.0

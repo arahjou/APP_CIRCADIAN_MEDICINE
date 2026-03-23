@@ -56,6 +56,12 @@ def build_centered_midpoint_hours(df: pd.DataFrame,
       - out_dt_col: combined datetime of mid sleep
       - out_mid_col: 12-hour centered midpoint hours (−12..+12 from local noon)
     """
+    if df.empty:
+        out = df.copy()
+        out[out_dt_col] = pd.NaT
+        out[out_mid_col] = np.nan
+        return out
+
     # Combine date & time into a single datetime (naive = local)
     dt = pd.to_datetime(df[date_col].astype(str) + " " + df[time_col].astype(str), errors="coerce")
     if dt.isna().all():

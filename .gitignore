@@ -246,3 +246,6 @@ image/*.jpg
 *.swp
 *.swo
 *_backup.*
+
+.venv/
+data/

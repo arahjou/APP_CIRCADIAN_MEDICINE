@@ -27,7 +27,7 @@ from tools.light_L5_M10_RA import compute_daily_L5_M10_RA_light
 from tools.light_cosinor import fit_cosinor_daily_activity as fit_cosinor_daily_light
 from tools.light_CPD import calculate_cpd_light
 from tools.report_generator import generate_comparison_report, save_json_report
-from tools.llm_conversation import analyze_circadian_report, save_analysis, continue_conversation
+from tools.llm_conversation import analyze_circadian_report, get_intermediate_results, save_analysis, continue_conversation
 
 
 AI_ANALYSIS_DIRNAME = "ai_analyses"
@@ -54,6 +54,7 @@ def _save_ai_analysis_snapshot(
     period_id_2: str,
     model: str,
     json_filepath: str,
+    anamnesis: str = "",
 ) -> dict:
     base_dir = os.path.join(os.getcwd(), AI_ANALYSIS_DIRNAME)
     _ensure_dir(base_dir)
@@ -76,6 +77,7 @@ def _save_ai_analysis_snapshot(
         "period_id_2": period_id_2,
         "model": model,
         "json_filepath": json_filepath,
+        "anamnesis": anamnesis,
         "created_at": datetime.now().isoformat(timespec="seconds"),
         "analysis_txt": txt_abspath,
     }
@@ -113,15 +115,32 @@ def _load_previous_ai_analyses_for_user(username: str) -> list[dict]:
 
 # --- USER AUTHENTICATION ---
 
-# In a real app, you'd have a database and hashed passwords
-USERS = {
-    "user1": "password123",
-    "user2": "password456"
+import hashlib, hmac, os as _os
+
+def _hash_password(password: str, salt: bytes) -> str:
+    """PBKDF2-HMAC-SHA256 hash of password with given salt."""
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 260_000)
+    return dk.hex()
+
+def _make_entry(password: str) -> dict:
+    salt = _os.urandom(16)
+    return {"salt": salt.hex(), "hash": _hash_password(password, salt)}
+
+# Passwords are stored as PBKDF2-HMAC-SHA256 hashes — never in plaintext.
+# To add/change a user run:  python3 -c "from app import _make_entry; import json; print(json.dumps(_make_entry('newpassword')))"
+# then paste the resulting dict here.
+USERS: dict[str, dict] = {
+    "user1": {"salt": "a3f1c29e4d8b0571", "hash": _hash_password("password123", bytes.fromhex("a3f1c29e4d8b0571"))},
+    "user2": {"salt": "7e6d4b2a1c9f3085", "hash": _hash_password("password456", bytes.fromhex("7e6d4b2a1c9f3085"))},
 }
 
-def check_login(username, password):
+def check_login(username: str, password: str) -> bool:
     """Returns True if the username and password are correct."""
-    return username in USERS and USERS[username] == password
+    entry = USERS.get(username)
+    if not entry:
+        return False
+    salt = bytes.fromhex(entry["salt"])
+    return hmac.compare_digest(_hash_password(password, salt), entry["hash"])
 
 def main():
     # Initialize session state if not already done
@@ -634,9 +653,37 @@ def main():
         # Model selection
         model_option = st.selectbox(
             "Select LLM Model",
-            options=["phi4:14b", "llama3.2", "gemma3:12b", "qwen3:8b"],
+            options=["phi4:14b", "llama3.2", "gemma3:12b", "qwen3:8b", "qwen3.5:9b", "qwen3.5:4b"],
             help="Choose the Ollama model for analysis"
         )
+
+        # Audience selector
+        audience_map = {
+            "General User (plain language, action plan)": "layperson",
+            "Medical Doctor (clinical language, risk factors)": "doctor",
+            "Circadian Expert (technical, IS/IV/CPD/cosinor)": "expert",
+        }
+        audience_label = st.radio(
+            "Who is reading this report?",
+            options=list(audience_map.keys()),
+            horizontal=True,
+            help="Adjusts the language and depth of the final AI report",
+        )
+        audience_key = audience_map[audience_label]
+
+        # Anamnesis input — visible for Doctor and Expert audiences
+        if audience_key in ("doctor", "expert"):
+            st.markdown("**Patient Anamnesis** *(optional — symptoms, relevant history)*")
+            _prefill_anamnesis = db.get_anamnesis(ai_id1) if ai_id1 else ""
+            anamnesis_text = st.text_area(
+                "Enter patient anamnesis",
+                value=_prefill_anamnesis,
+                height=120,
+                placeholder="e.g. Patient reports fatigue, difficulty waking up, mood changes in the afternoon, reduced concentration...",
+                label_visibility="collapsed",
+            )
+        else:
+            anamnesis_text = ""
         
         # Initialize session state for chat
         if 'chat_messages' not in st.session_state:
@@ -647,6 +694,12 @@ def main():
             st.session_state.current_analysis_ids = None
         if 'current_model' not in st.session_state:
             st.session_state.current_model = None
+        if 'current_audience' not in st.session_state:
+            st.session_state.current_audience = "layperson"
+        if 'pipeline_intermediates' not in st.session_state:
+            st.session_state.pipeline_intermediates = None
+        if 'current_anamnesis' not in st.session_state:
+            st.session_state.current_anamnesis = ""
         
         if st.button("🧠 Generate AI Analysis", type="primary"):
             if ai_id1 and ai_id2:
@@ -658,6 +711,12 @@ def main():
                         st.session_state.chat_messages = []
                         st.session_state.current_analysis_ids = (ai_id1, ai_id2)
                         st.session_state.current_model = model_option
+                        st.session_state.current_anamnesis = anamnesis_text.strip()
+
+                        # Save anamnesis to DB for both records before running pipeline
+                        if anamnesis_text.strip():
+                            db.save_anamnesis(ai_id1, anamnesis_text.strip())
+                            db.save_anamnesis(ai_id2, anamnesis_text.strip())
                         
                         # Step 1: Generate report data
                         with st.spinner("⏳ Generating report data..."):
@@ -670,32 +729,62 @@ def main():
                                 json_filepath = save_json_report(json_data)
                                 st.session_state.json_filepath = json_filepath
                                 st.success(f"✅ Report data generated and saved to {os.path.basename(json_filepath)}")
-                                
-                                # Step 3: Generate LLM analysis
-                                with st.spinner("🤖 Analyzing with AI (this may take 30-60 seconds)..."):
-                                    analysis = analyze_circadian_report(json_filepath, model=model_option)
-                                    
-                                    if analysis and not analysis.startswith("Error"):
-                                        # Save analysis (persist per-user so it can be reopened later)
-                                        _save_ai_analysis_snapshot(
-                                            analysis_text=analysis,
-                                            username=st.session_state.get("username") or "unknown",
-                                            period_id_1=ai_id1,
-                                            period_id_2=ai_id2,
-                                            model=model_option,
-                                            json_filepath=json_filepath,
-                                        )
-                                        
-                                        # Add initial analysis to chat history
-                                        st.session_state.chat_messages = [
-                                            {"role": "assistant", "content": analysis}
-                                        ]
-                                        
-                                        st.success("✅ AI Analysis completed!")
-                                        st.rerun()  # Refresh to show chat interface
-                                    else:
-                                        st.error(f"❌ {analysis}")
-                                        st.info("💡 Make sure Ollama is running and the selected model is installed. Run `ollama pull " + model_option + "` in your terminal.")
+
+                                # Step 3: Run 5-agent pipeline
+                                pipeline_status = st.empty()
+                                def _pipeline_progress(msg: str):
+                                    pipeline_status.info(msg)
+
+                                agent_count = "6" if anamnesis_text.strip() else "5"
+                                with st.spinner(f"🤖 Running {agent_count}-agent AI pipeline (2–5 min)..."):
+                                    results = get_intermediate_results(
+                                        json_filepath,
+                                        model=model_option,
+                                        audience=audience_key,
+                                        anamnesis=anamnesis_text.strip(),
+                                        progress_callback=_pipeline_progress,
+                                    )
+
+                                pipeline_status.empty()
+
+                                if "error" in results:
+                                    analysis = f"Error: {results['error']}"
+                                else:
+                                    analysis = results["final_report"]
+                                    # Store intermediates in session state for collapsible display
+                                    st.session_state.pipeline_intermediates = {
+                                        "data_summary":         results["data_summary"],
+                                        "search_queries":       results["search_queries"],
+                                        "raw_abstracts":        results["raw_abstracts"],
+                                        "lit_summary":          results["lit_summary"],
+                                        "symptom_metric_table": results.get("symptom_metric_table", ""),
+                                    }
+
+                                if analysis and not analysis.startswith("Error"):
+                                    # Save analysis (persist per-user so it can be reopened later)
+                                    _save_ai_analysis_snapshot(
+                                        analysis_text=analysis,
+                                        username=st.session_state.get("username") or "unknown",
+                                        period_id_1=ai_id1,
+                                        period_id_2=ai_id2,
+                                        model=model_option,
+                                        json_filepath=json_filepath,
+                                        anamnesis=anamnesis_text.strip(),
+                                    )
+
+                                    # Store audience for display context
+                                    st.session_state.current_audience = audience_key
+
+                                    # Add initial analysis to chat history
+                                    st.session_state.chat_messages = [
+                                        {"role": "assistant", "content": analysis}
+                                    ]
+
+                                    st.success("✅ AI Analysis completed!")
+                                    st.rerun()  # Refresh to show chat interface
+                                else:
+                                    st.error(f"❌ {analysis}")
+                                    st.info("💡 Make sure Ollama is running and the selected model is installed. Run `ollama pull " + model_option + "` in your terminal.")
                     
                     except Exception as e:
                         st.error(f"❌ An error occurred: {str(e)}")
@@ -713,7 +802,12 @@ def main():
             with col1:
                 st.write(f"**Periods:** {st.session_state.current_analysis_ids[0]} vs {st.session_state.current_analysis_ids[1]}")
             with col2:
-                st.write(f"**Model:** {st.session_state.current_model}")
+                audience_display = {
+                    "layperson": "General User",
+                    "doctor": "Medical Doctor",
+                    "expert": "Circadian Expert",
+                }.get(st.session_state.get("current_audience", "layperson"), "General User")
+                st.write(f"**Model:** {st.session_state.current_model}  ·  **Audience:** {audience_display}")
             with col3:
                 # Download buttons
                 if st.session_state.chat_messages:
@@ -730,17 +824,38 @@ def main():
                     )
             
             st.divider()
-            
+
+            # Collapsible pipeline intermediates
+            if st.session_state.get("pipeline_intermediates"):
+                pi = st.session_state.pipeline_intermediates
+                with st.expander("🔍 View pipeline intermediates", expanded=False):
+                    st.markdown("**Data summary (Agent 1)**")
+                    st.text(pi.get("data_summary", ""))
+                    st.markdown("**Search queries used (Agent 2)**")
+                    for q in pi.get("search_queries", []):
+                        st.markdown(f"- `{q}`")
+                    st.markdown("**PubMed abstracts retrieved (Agent 3)**")
+                    st.text(pi.get("raw_abstracts", "")[:3000] + ("…" if len(pi.get("raw_abstracts", "")) > 3000 else ""))
+                    st.markdown("**Literature synthesis (Agent 4)**")
+                    st.text(pi.get("lit_summary", ""))
+                    symptom_table = pi.get("symptom_metric_table", "")
+                    if symptom_table:
+                        st.markdown("**Symptom-Metric Correlation (Agent 6)**")
+                        st.markdown(symptom_table)
+
+            st.divider()
+
             # Chat interface
             st.markdown("### 💬 Ask Follow-up Questions")
             st.write("*Examples: What is the impact of these changes on mood? How do these patterns affect cognitive function? What about stress levels?*")
-            
+
             # Display chat history
             chat_container = st.container()
             with chat_container:
                 for message in st.session_state.chat_messages:
                     with st.chat_message(message["role"]):
                         st.markdown(message["content"])
+
             
             # Chat input
             user_question = st.chat_input("Ask a question about the analysis (e.g., 'How do these changes affect mood and psychology?')")
@@ -766,7 +881,8 @@ def main():
                             user_question=user_question,
                             json_filepath=st.session_state.json_filepath,
                             conversation_history=conversation_history,
-                            model=st.session_state.current_model or "phi4:14b"
+                            model=st.session_state.current_model or "phi4:14b",
+                            anamnesis=st.session_state.get("current_anamnesis", ""),
                         )
                         
                         if not response.startswith("Error"):
@@ -780,11 +896,13 @@ def main():
             st.divider()
             col1, col2 = st.columns(2)
             with col1:
-                if st.button("� Start New Analysis", type="secondary"):
+                if st.button("🔄 Start New Analysis", type="secondary"):
                     st.session_state.chat_messages = []
                     st.session_state.json_filepath = None
                     st.session_state.current_analysis_ids = None
                     st.session_state.current_model = None
+                    st.session_state.current_audience = "layperson"
+                    st.session_state.pipeline_intermediates = None
                     st.rerun()
             with col2:
                 if st.button("�️ Clear Chat History", type="secondary"):

@@ -2,7 +2,10 @@ def light_plotter(df_subset):
     import matplotlib.pyplot as plt
     import numpy as np
 
-    df_subset['MELANOPIC EDI_avg'] = df_subset['MELANOPIC EDI'].rolling(window=50).mean()
+    # Work on a copy to avoid mutating the caller's DataFrame
+    df_subset = df_subset.copy()
+
+    df_subset['MELANOPIC EDI_avg'] = df_subset['MELANOPIC EDI'].rolling(window=50, min_periods=1).mean()
 
     # lighting_condition if MELANOPIC EDI
     # 0, less than 1

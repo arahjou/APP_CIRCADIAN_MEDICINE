@@ -32,8 +32,8 @@ def generate_comparison_report(ids):
                 data = json.loads(row['results'])
                 id_metrics = {"id": record_id}
                 for metric, values in data.items():
-                    if values:
-                        minutes_list = [entry.get("minutes", 0) for entry in values if entry.get("minutes") is not None]
+                    if isinstance(values, list) and values:
+                        minutes_list = [entry.get("minutes", 0) for entry in values if isinstance(entry, dict) and entry.get("minutes") is not None]
                         if minutes_list:
                             id_metrics[f"{metric}_mean_minutes"] = sum(minutes_list) / len(minutes_list)
                             id_metrics[f"{metric}_total_minutes"] = sum(minutes_list)
