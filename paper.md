@@ -97,6 +97,6 @@ The software is available at [https://github.com/<your-org>/circadian-medicine-s
 
 # Acknowledgements
 
-Developed at the Circadian Medicine Lab, Charité – Universitätsmedizin Berlin. The author thanks [colleagues / PI name] for scientific guidance and data collection support. LLM inference uses Ollama [@OllamaSoftware]; literature retrieval uses the NCBI Entrez E-utilities API [@NCBIEutilities].
+Developed at the Circadian Medicine Lab, Charité – Universitätsmedizin Berlin. The author thanks Luísa Klaus Pilz for scientific guidance. LLM inference uses Ollama [@OllamaSoftware]; literature retrieval uses the NCBI Entrez E-utilities API [@NCBIEutilities].
 
 # References

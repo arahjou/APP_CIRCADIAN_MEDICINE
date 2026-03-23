@@ -17,9 +17,9 @@ It was developed at the **Charité – Universitätsmedizin Berlin, Circadian Me
 
 ---
 
-## Screenshots
+## Workflow
 
-> Add screenshots of the main analysis view, comparison tab, and AI report here.
+![Schematic Diagram](image/Schematic_Figure.png)
 
 ---
 
