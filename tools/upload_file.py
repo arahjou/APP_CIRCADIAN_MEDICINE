@@ -2,11 +2,40 @@
 def upload_file(upload_file):
     import pandas as pd
     if upload_file is not None:
-        df = pd.read_table(upload_file, skiprows=32, header=0, sep=';')
+        # Read raw bytes once to auto-detect format
+        raw_bytes = upload_file.read()
+        upload_file.seek(0)
+        try:
+            text = raw_bytes.decode('utf-8')
+        except UnicodeDecodeError:
+            text = raw_bytes.decode('latin-1')
+
+        lines = text.splitlines()
+
+        # Find the header row by locating 'DATE/TIME'
+        skiprows = 0
+        sep = ','
+        for i, line in enumerate(lines[:50]):
+            if 'DATE/TIME' in line:
+                skiprows = i
+                sep = ';' if ';' in line else ','
+                break
+
+        upload_file.seek(0)
+        df = pd.read_table(upload_file, skiprows=skiprows, header=0, sep=sep)
+
+        # Normalise column names: replace dots with spaces
+        # (some exports use 'MELANOPIC.EDI' instead of 'MELANOPIC EDI')
+        df.columns = [c.replace('.', ' ') for c in df.columns]
+
+        # Auto-detect date format: DD/MM/YYYY vs YYYY-MM-DD
+        sample = str(df['DATE/TIME'].dropna().iloc[0]) if not df['DATE/TIME'].dropna().empty else ''
+        date_format = '%d/%m/%Y %H:%M:%S' if '/' in sample else '%Y-%m-%d %H:%M:%S'
+
         df['DATE/TIME'] = pd.to_datetime(
             df['DATE/TIME'],
-            format='%d/%m/%Y %H:%M:%S',
-            errors='coerce' ,   # optional, helps catch mismatches
+            format=date_format,
+            errors='coerce',
             utc=False
         ).dt.tz_localize('Europe/Berlin', nonexistent='shift_forward', ambiguous='NaT')
 

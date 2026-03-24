@@ -220,9 +220,9 @@ llm_analysis.txt
 *.json
 
 # Data files (exclude actual patient data)
-data/*.csv
-data/*.txt
-!data/README.md
+#data/*.csv
+#data/*.txt
+#!data/README.md
 
 # Generated images
 image/*.png
@@ -246,6 +246,3 @@ image/*.jpg
 *.swp
 *.swo
 *_backup.*
-
-.venv/
-data/

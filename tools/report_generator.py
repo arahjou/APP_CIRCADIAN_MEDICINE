@@ -42,6 +42,11 @@ def generate_comparison_report(ids):
                             id_metrics[f"{metric}_mean_minutes"] = 0
                             id_metrics[f"{metric}_total_minutes"] = 0
                             id_metrics[f"{metric}_count_days"] = 0
+                    else:
+                        # values is a string message (no events found) — store as zero
+                        id_metrics[f"{metric}_mean_minutes"] = 0
+                        id_metrics[f"{metric}_total_minutes"] = 0
+                        id_metrics[f"{metric}_count_days"] = 0
                 sleep_light_metrics.append(id_metrics)
             except (json.JSONDecodeError, KeyError):
                 pass
@@ -105,6 +110,11 @@ def generate_comparison_report(ids):
         return "No data found for the specified IDs.", None, None
 
     # 5) Create Tables
+    # Ensure sleep_light_exposure metric columns exist (they may be absent if no light events were found)
+    for col in ['metric1_mean_minutes', 'metric2_mean_minutes', 'metric3_mean_minutes']:
+        if col not in df_combined.columns:
+            df_combined[col] = None
+
     # Table 1
     table_1 = df_combined[['id', 'sleep_analysis.cpd_mid_sleep.cpd_hours_mean','sleep_analysis.sri_sleep.SRI_mean', 'sleep_duration_min_minutes']].copy()
     table_1.rename(columns={'id': 'Period', 'sleep_analysis.cpd_mid_sleep.cpd_hours_mean': 'CPD1', 'sleep_analysis.sri_sleep.SRI_mean': 'SRI', 'sleep_duration_min_minutes': 'Duration'}, inplace=True)
