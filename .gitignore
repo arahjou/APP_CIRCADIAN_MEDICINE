@@ -225,8 +225,8 @@ llm_analysis.txt
 #!data/README.md
 
 # Generated images
-image/*.png
-image/*.jpg
+#image/*.png
+#image/*.jpg
 !image/README.md
 
 # macOS
