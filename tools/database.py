@@ -64,6 +64,25 @@ class ActigraphDB:
                     FOREIGN KEY (record_id) REFERENCES analysis_records (id)
                 )
             ''')
+
+            # AI analysis runs (Tab 4) with upsert semantics per unique run key
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS ai_analysis_runs (
+                    username TEXT,
+                    period_id_1 TEXT,
+                    period_id_2 TEXT,
+                    model TEXT,
+                    audience TEXT,
+                    anamnesis TEXT,
+                    json_filepath TEXT,
+                    json_input TEXT,
+                    pipeline_outputs TEXT,
+                    final_result TEXT,
+                    created_at TEXT,
+                    updated_at TEXT,
+                    PRIMARY KEY (username, period_id_1, period_id_2, model, audience)
+                )
+            ''')
             
             # Migrate existing databases — add anamnesis column if it doesn't exist yet
             try:
@@ -72,6 +91,128 @@ class ActigraphDB:
                 pass  # column already exists
 
             conn.commit()
+
+    def save_ai_analysis_run(
+        self,
+        username: str,
+        period_id_1: str,
+        period_id_2: str,
+        model: str,
+        audience: str,
+        anamnesis: str,
+        json_filepath: str,
+        json_input: Any,
+        pipeline_outputs: Any,
+        final_result: str,
+    ) -> bool:
+        """Insert or replace an AI analysis run for the same user/period pair/model/audience."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+                cursor.execute(
+                    """
+                    SELECT created_at
+                    FROM ai_analysis_runs
+                    WHERE username = ? AND period_id_1 = ? AND period_id_2 = ? AND model = ? AND audience = ?
+                    """,
+                    (username, period_id_1, period_id_2, model, audience),
+                )
+                existing = cursor.fetchone()
+                created_at = existing[0] if existing and existing[0] else now
+
+                json_input_blob = json.dumps(json_input, default=str)
+                pipeline_outputs_blob = json.dumps(pipeline_outputs, default=str)
+
+                cursor.execute(
+                    """
+                    INSERT OR REPLACE INTO ai_analysis_runs (
+                        username,
+                        period_id_1,
+                        period_id_2,
+                        model,
+                        audience,
+                        anamnesis,
+                        json_filepath,
+                        json_input,
+                        pipeline_outputs,
+                        final_result,
+                        created_at,
+                        updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        username,
+                        period_id_1,
+                        period_id_2,
+                        model,
+                        audience,
+                        anamnesis,
+                        json_filepath,
+                        json_input_blob,
+                        pipeline_outputs_blob,
+                        final_result,
+                        created_at,
+                        now,
+                    ),
+                )
+
+                conn.commit()
+                return True
+        except Exception as e:
+            print(f"Error saving AI analysis run: {e}")
+            return False
+
+    def get_ai_analysis_run(
+        self,
+        username: str,
+        period_id_1: str,
+        period_id_2: str,
+        model: str,
+        audience: str,
+    ) -> Optional[Dict]:
+        """Retrieve one persisted AI analysis run for exact Tab 4 context key."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT
+                        username,
+                        period_id_1,
+                        period_id_2,
+                        model,
+                        audience,
+                        anamnesis,
+                        json_filepath,
+                        json_input,
+                        pipeline_outputs,
+                        final_result,
+                        created_at,
+                        updated_at
+                    FROM ai_analysis_runs
+                    WHERE username = ? AND period_id_1 = ? AND period_id_2 = ? AND model = ? AND audience = ?
+                    """,
+                    (username, period_id_1, period_id_2, model, audience),
+                )
+                row = cursor.fetchone()
+                if not row:
+                    return None
+
+                columns = [description[0] for description in cursor.description]
+                record = dict(zip(columns, row))
+
+                for key in ("json_input", "pipeline_outputs"):
+                    try:
+                        record[key] = json.loads(record[key]) if record.get(key) else None
+                    except Exception:
+                        pass
+
+                return record
+        except Exception as e:
+            print(f"Error retrieving AI analysis run: {e}")
+            return None
     
     def save_anamnesis(self, record_id: str, text: str) -> bool:
         """Save or update the anamnesis text for a record."""

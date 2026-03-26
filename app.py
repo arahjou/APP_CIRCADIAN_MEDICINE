@@ -671,10 +671,24 @@ def main():
         )
         audience_key = audience_map[audience_label]
 
+        # Check if this exact AI context already exists in DB (same periods + model + audience)
+        existing_ai_run = None
+        if ai_id1 and ai_id2 and ai_id1 != ai_id2:
+            existing_ai_run = db.get_ai_analysis_run(
+                username=st.session_state.get("username") or "unknown",
+                period_id_1=ai_id1,
+                period_id_2=ai_id2,
+                model=model_option,
+                audience=audience_key,
+            )
+
         # Anamnesis input — visible for Doctor and Expert audiences
         if audience_key in ("doctor", "expert"):
             st.markdown("**Patient Anamnesis** *(optional — symptoms, relevant history)*")
-            _prefill_anamnesis = db.get_anamnesis(ai_id1) if ai_id1 else ""
+            if existing_ai_run and existing_ai_run.get("anamnesis"):
+                _prefill_anamnesis = existing_ai_run.get("anamnesis")
+            else:
+                _prefill_anamnesis = db.get_anamnesis(ai_id1) if ai_id1 else ""
             anamnesis_text = st.text_area(
                 "Enter patient anamnesis",
                 value=_prefill_anamnesis,
@@ -700,6 +714,36 @@ def main():
             st.session_state.pipeline_intermediates = None
         if 'current_anamnesis' not in st.session_state:
             st.session_state.current_anamnesis = ""
+
+        if existing_ai_run:
+            last_updated = existing_ai_run.get("updated_at") or existing_ai_run.get("created_at") or "unknown"
+            st.info(f"💾 Saved AI analysis found for this selection (last update: {last_updated}).")
+            if st.button("📂 Load Saved AI Analysis", type="secondary"):
+                st.session_state.current_analysis_ids = (ai_id1, ai_id2)
+                st.session_state.current_model = model_option
+                st.session_state.current_audience = audience_key
+                st.session_state.current_anamnesis = existing_ai_run.get("anamnesis", "") or ""
+                st.session_state.json_filepath = existing_ai_run.get("json_filepath")
+
+                final_result = existing_ai_run.get("final_result") or ""
+                st.session_state.chat_messages = (
+                    [{"role": "assistant", "content": final_result}] if final_result else []
+                )
+
+                pipeline_outputs = existing_ai_run.get("pipeline_outputs")
+                if isinstance(pipeline_outputs, dict):
+                    st.session_state.pipeline_intermediates = {
+                        "data_summary": pipeline_outputs.get("data_summary", ""),
+                        "search_queries": pipeline_outputs.get("search_queries", []),
+                        "raw_abstracts": pipeline_outputs.get("raw_abstracts", ""),
+                        "lit_summary": pipeline_outputs.get("lit_summary", ""),
+                        "symptom_metric_table": pipeline_outputs.get("symptom_metric_table", ""),
+                    }
+                else:
+                    st.session_state.pipeline_intermediates = None
+
+                st.success("✅ Loaded saved AI analysis from database.")
+                st.rerun()
         
         if st.button("🧠 Generate AI Analysis", type="primary"):
             if ai_id1 and ai_id2:
@@ -761,6 +805,22 @@ def main():
                                     }
 
                                 if analysis and not analysis.startswith("Error"):
+                                    # Persist full AI run to DB (JSON input, all agent outputs, and final report).
+                                    save_ok = db.save_ai_analysis_run(
+                                        username=st.session_state.get("username") or "unknown",
+                                        period_id_1=ai_id1,
+                                        period_id_2=ai_id2,
+                                        model=model_option,
+                                        audience=audience_key,
+                                        anamnesis=anamnesis_text.strip(),
+                                        json_filepath=json_filepath,
+                                        json_input=json_data,
+                                        pipeline_outputs=results,
+                                        final_result=analysis,
+                                    )
+                                    if not save_ok:
+                                        st.warning("⚠️ Could not save AI pipeline details to database.")
+
                                     # Save analysis (persist per-user so it can be reopened later)
                                     _save_ai_analysis_snapshot(
                                         analysis_text=analysis,
