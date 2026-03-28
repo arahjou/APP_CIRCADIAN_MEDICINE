@@ -715,35 +715,71 @@ def main():
         if 'current_anamnesis' not in st.session_state:
             st.session_state.current_anamnesis = ""
 
+        def _apply_saved_ai_run_to_session(saved_run: dict) -> None:
+            st.session_state.current_analysis_ids = (
+                saved_run.get("period_id_1"),
+                saved_run.get("period_id_2"),
+            )
+            st.session_state.current_model = saved_run.get("model")
+            st.session_state.current_audience = saved_run.get("audience") or "layperson"
+            st.session_state.current_anamnesis = saved_run.get("anamnesis", "") or ""
+            st.session_state.json_filepath = saved_run.get("json_filepath")
+
+            final_result = saved_run.get("final_result") or ""
+            st.session_state.chat_messages = (
+                [{"role": "assistant", "content": final_result}] if final_result else []
+            )
+
+            pipeline_outputs = saved_run.get("pipeline_outputs")
+            if isinstance(pipeline_outputs, dict):
+                st.session_state.pipeline_intermediates = {
+                    "data_summary": pipeline_outputs.get("data_summary", ""),
+                    "search_queries": pipeline_outputs.get("search_queries", []),
+                    "raw_abstracts": pipeline_outputs.get("raw_abstracts", ""),
+                    "lit_summary": pipeline_outputs.get("lit_summary", ""),
+                    "symptom_metric_table": pipeline_outputs.get("symptom_metric_table", ""),
+                }
+            else:
+                st.session_state.pipeline_intermediates = None
+
+        current_user = st.session_state.get("username") or "unknown"
+        cached_pair_runs = []
+        if ai_id1 and ai_id2 and ai_id1 != ai_id2:
+            cached_pair_runs = db.get_ai_analysis_runs_for_pair(
+                username=current_user,
+                period_id_1=ai_id1,
+                period_id_2=ai_id2,
+                include_reversed=True,
+            )
+
+        if cached_pair_runs:
+            st.markdown("**Saved analyses for this period pair**")
+            selected_cached_index = st.selectbox(
+                "Choose a saved run",
+                options=list(range(len(cached_pair_runs))),
+                format_func=lambda i: (
+                    f"{cached_pair_runs[i].get('period_id_1')} vs {cached_pair_runs[i].get('period_id_2')}"
+                    f"  |  model={cached_pair_runs[i].get('model')}"
+                    f"  |  audience={cached_pair_runs[i].get('audience')}"
+                    f"  |  updated={cached_pair_runs[i].get('updated_at') or cached_pair_runs[i].get('created_at') or 'unknown'}"
+                ),
+                key="cached_pair_runs_select",
+            )
+            if st.button("📂 Load Selected Saved Run", type="secondary"):
+                selected_run = cached_pair_runs[selected_cached_index]
+                _apply_saved_ai_run_to_session(selected_run)
+                st.success("✅ Loaded selected saved AI analysis from database.")
+                st.rerun()
+
+        st.caption(
+            "Use 'Load Selected Saved Run' to avoid LLM cost. "
+            "'Generate AI Analysis' always runs a new analysis and overwrites the saved entry for the same IDs + model + audience."
+        )
+
         if existing_ai_run:
             last_updated = existing_ai_run.get("updated_at") or existing_ai_run.get("created_at") or "unknown"
             st.info(f"💾 Saved AI analysis found for this selection (last update: {last_updated}).")
-            if st.button("📂 Load Saved AI Analysis", type="secondary"):
-                st.session_state.current_analysis_ids = (ai_id1, ai_id2)
-                st.session_state.current_model = model_option
-                st.session_state.current_audience = audience_key
-                st.session_state.current_anamnesis = existing_ai_run.get("anamnesis", "") or ""
-                st.session_state.json_filepath = existing_ai_run.get("json_filepath")
-
-                final_result = existing_ai_run.get("final_result") or ""
-                st.session_state.chat_messages = (
-                    [{"role": "assistant", "content": final_result}] if final_result else []
-                )
-
-                pipeline_outputs = existing_ai_run.get("pipeline_outputs")
-                if isinstance(pipeline_outputs, dict):
-                    st.session_state.pipeline_intermediates = {
-                        "data_summary": pipeline_outputs.get("data_summary", ""),
-                        "search_queries": pipeline_outputs.get("search_queries", []),
-                        "raw_abstracts": pipeline_outputs.get("raw_abstracts", ""),
-                        "lit_summary": pipeline_outputs.get("lit_summary", ""),
-                        "symptom_metric_table": pipeline_outputs.get("symptom_metric_table", ""),
-                    }
-                else:
-                    st.session_state.pipeline_intermediates = None
-
-                st.success("✅ Loaded saved AI analysis from database.")
-                st.rerun()
+            st.warning("ℹ️ Generating now will overwrite this saved result for the same IDs + model + audience.")
         
         if st.button("🧠 Generate AI Analysis", type="primary"):
             if ai_id1 and ai_id2:
@@ -751,16 +787,22 @@ def main():
                     st.error("Please select two different periods to compare.")
                 else:
                     try:
+                        # Keep anamnesis context consistent with DB overwrite rules:
+                        # if user leaves it blank during rerun, retain previously saved text.
+                        effective_anamnesis = anamnesis_text.strip()
+                        if not effective_anamnesis and existing_ai_run:
+                            effective_anamnesis = (existing_ai_run.get("anamnesis") or "").strip()
+
                         # Reset chat when generating new analysis
                         st.session_state.chat_messages = []
                         st.session_state.current_analysis_ids = (ai_id1, ai_id2)
                         st.session_state.current_model = model_option
-                        st.session_state.current_anamnesis = anamnesis_text.strip()
+                        st.session_state.current_anamnesis = effective_anamnesis
 
                         # Save anamnesis to DB for both records before running pipeline
-                        if anamnesis_text.strip():
-                            db.save_anamnesis(ai_id1, anamnesis_text.strip())
-                            db.save_anamnesis(ai_id2, anamnesis_text.strip())
+                        if effective_anamnesis:
+                            db.save_anamnesis(ai_id1, effective_anamnesis)
+                            db.save_anamnesis(ai_id2, effective_anamnesis)
                         
                         # Step 1: Generate report data
                         with st.spinner("⏳ Generating report data..."):
@@ -779,13 +821,13 @@ def main():
                                 def _pipeline_progress(msg: str):
                                     pipeline_status.info(msg)
 
-                                agent_count = "6" if anamnesis_text.strip() else "5"
+                                agent_count = "6" if effective_anamnesis else "5"
                                 with st.spinner(f"🤖 Running {agent_count}-agent AI pipeline (2–5 min)..."):
                                     results = get_intermediate_results(
                                         json_filepath,
                                         model=model_option,
                                         audience=audience_key,
-                                        anamnesis=anamnesis_text.strip(),
+                                        anamnesis=effective_anamnesis,
                                         progress_callback=_pipeline_progress,
                                     )
 
@@ -812,14 +854,17 @@ def main():
                                         period_id_2=ai_id2,
                                         model=model_option,
                                         audience=audience_key,
-                                        anamnesis=anamnesis_text.strip(),
+                                        anamnesis=effective_anamnesis,
                                         json_filepath=json_filepath,
                                         json_input=json_data,
                                         pipeline_outputs=results,
                                         final_result=analysis,
+                                        agent_trace=results.get("agent_trace") if isinstance(results, dict) else None,
                                     )
                                     if not save_ok:
                                         st.warning("⚠️ Could not save AI pipeline details to database.")
+                                    elif existing_ai_run:
+                                        st.info("♻️ Saved AI analysis was replaced for this IDs + model + audience key.")
 
                                     # Save analysis (persist per-user so it can be reopened later)
                                     _save_ai_analysis_snapshot(
@@ -829,7 +874,7 @@ def main():
                                         period_id_2=ai_id2,
                                         model=model_option,
                                         json_filepath=json_filepath,
-                                        anamnesis=anamnesis_text.strip(),
+                                        anamnesis=effective_anamnesis,
                                     )
 
                                     # Store audience for display context

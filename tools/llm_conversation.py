@@ -621,7 +621,75 @@ def get_intermediate_results(
     }
     try:
         final_state = _GRAPH.invoke(initial_state)
+        agent_trace = {
+            "agent1_data_summariser": {
+                "input": {
+                    "compact_report": initial_state["compact_report"],
+                    "model": initial_state["model"],
+                },
+                "output": {
+                    "data_summary": final_state["data_summary"],
+                },
+            },
+            "agent2_keyword_extractor": {
+                "input": {
+                    "data_summary": final_state["data_summary"],
+                    "anamnesis": initial_state["anamnesis"],
+                },
+                "output": {
+                    "search_queries": final_state["search_queries"],
+                },
+            },
+            "agent3_literature_search": {
+                "input": {
+                    "search_queries": final_state["search_queries"],
+                },
+                "output": {
+                    "raw_abstracts": final_state["raw_abstracts"],
+                    "pmid_list": final_state["pmid_list"],
+                },
+            },
+            "agent4_literature_synthesiser": {
+                "input": {
+                    "data_summary": final_state["data_summary"],
+                    "raw_abstracts": final_state["raw_abstracts"],
+                },
+                "output": {
+                    "lit_summary": final_state["lit_summary"],
+                },
+            },
+            "agent5_report_writer": {
+                "input": {
+                    "compact_report": final_state["compact_report"],
+                    "data_summary": final_state["data_summary"],
+                    "lit_summary": final_state["lit_summary"],
+                    "symptom_metric_table": final_state.get("symptom_metric_table", ""),
+                    "pmid_list": final_state["pmid_list"],
+                    "audience": final_state["audience"],
+                },
+                "output": {
+                    "final_report": final_state["final_report"],
+                },
+            },
+        }
+
+        if final_state.get("anamnesis", "").strip():
+            agent_trace["agent6_symptom_metric_linker"] = {
+                "input": {
+                    "anamnesis": final_state["anamnesis"],
+                    "data_summary": final_state["data_summary"],
+                    "raw_abstracts": final_state["raw_abstracts"],
+                },
+                "output": {
+                    "symptom_metric_table": final_state.get("symptom_metric_table", ""),
+                },
+            }
+
         return {
+            "json_filepath":         initial_state["json_filepath"],
+            "audience":              final_state["audience"],
+            "model":                 final_state["model"],
+            "anamnesis":             final_state.get("anamnesis", ""),
             "data_summary":         final_state["data_summary"],
             "search_queries":       final_state["search_queries"],
             "raw_abstracts":        final_state["raw_abstracts"],
@@ -629,6 +697,7 @@ def get_intermediate_results(
             "lit_summary":          final_state["lit_summary"],
             "symptom_metric_table": final_state["symptom_metric_table"],
             "final_report":         final_state["final_report"],
+            "agent_trace":          agent_trace,
         }
     except Exception as e:
         return {"error": f"Error during pipeline: {e}"}

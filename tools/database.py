@@ -83,6 +83,23 @@ class ActigraphDB:
                     PRIMARY KEY (username, period_id_1, period_id_2, model, audience)
                 )
             ''')
+
+            # Per-agent input/output trace for medical-grade reproducibility and auditing
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS ai_agent_traces (
+                    username TEXT,
+                    period_id_1 TEXT,
+                    period_id_2 TEXT,
+                    model TEXT,
+                    audience TEXT,
+                    agent_name TEXT,
+                    agent_input TEXT,
+                    agent_output TEXT,
+                    created_at TEXT,
+                    updated_at TEXT,
+                    PRIMARY KEY (username, period_id_1, period_id_2, model, audience, agent_name)
+                )
+            ''')
             
             # Migrate existing databases — add anamnesis column if it doesn't exist yet
             try:
@@ -104,6 +121,7 @@ class ActigraphDB:
         json_input: Any,
         pipeline_outputs: Any,
         final_result: str,
+        agent_trace: Optional[Dict[str, Any]] = None,
     ) -> bool:
         """Insert or replace an AI analysis run for the same user/period pair/model/audience."""
         try:
@@ -113,7 +131,7 @@ class ActigraphDB:
 
                 cursor.execute(
                     """
-                    SELECT created_at
+                    SELECT created_at, anamnesis
                     FROM ai_analysis_runs
                     WHERE username = ? AND period_id_1 = ? AND period_id_2 = ? AND model = ? AND audience = ?
                     """,
@@ -121,6 +139,16 @@ class ActigraphDB:
                 )
                 existing = cursor.fetchone()
                 created_at = existing[0] if existing and existing[0] else now
+                existing_anamnesis = existing[1] if existing and len(existing) > 1 else ""
+
+                # Preserve previous anamnesis if rerun was triggered without new anamnesis text.
+                incoming_anamnesis = (anamnesis or "").strip()
+                effective_anamnesis = incoming_anamnesis or (existing_anamnesis or "")
+
+                if agent_trace is None and isinstance(pipeline_outputs, dict):
+                    candidate_trace = pipeline_outputs.get("agent_trace")
+                    if isinstance(candidate_trace, dict):
+                        agent_trace = candidate_trace
 
                 json_input_blob = json.dumps(json_input, default=str)
                 pipeline_outputs_blob = json.dumps(pipeline_outputs, default=str)
@@ -148,7 +176,7 @@ class ActigraphDB:
                         period_id_2,
                         model,
                         audience,
-                        anamnesis,
+                        effective_anamnesis,
                         json_filepath,
                         json_input_blob,
                         pipeline_outputs_blob,
@@ -157,6 +185,65 @@ class ActigraphDB:
                         now,
                     ),
                 )
+
+                # Persist each agent input/output trace separately for structured DB queries.
+                if isinstance(agent_trace, dict):
+                    for agent_name, io_payload in agent_trace.items():
+                        if not isinstance(io_payload, dict):
+                            continue
+
+                        agent_input_blob = json.dumps(io_payload.get("input"), default=str)
+                        agent_output_blob = json.dumps(io_payload.get("output"), default=str)
+
+                        cursor.execute(
+                            """
+                            SELECT created_at
+                            FROM ai_agent_traces
+                            WHERE username = ? AND period_id_1 = ? AND period_id_2 = ?
+                              AND model = ? AND audience = ? AND agent_name = ?
+                            """,
+                            (
+                                username,
+                                period_id_1,
+                                period_id_2,
+                                model,
+                                audience,
+                                str(agent_name),
+                            ),
+                        )
+                        existing_agent = cursor.fetchone()
+                        agent_created_at = (
+                            existing_agent[0] if existing_agent and existing_agent[0] else now
+                        )
+
+                        cursor.execute(
+                            """
+                            INSERT OR REPLACE INTO ai_agent_traces (
+                                username,
+                                period_id_1,
+                                period_id_2,
+                                model,
+                                audience,
+                                agent_name,
+                                agent_input,
+                                agent_output,
+                                created_at,
+                                updated_at
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """,
+                            (
+                                username,
+                                period_id_1,
+                                period_id_2,
+                                model,
+                                audience,
+                                str(agent_name),
+                                agent_input_blob,
+                                agent_output_blob,
+                                agent_created_at,
+                                now,
+                            ),
+                        )
 
                 conn.commit()
                 return True
@@ -209,10 +296,115 @@ class ActigraphDB:
                     except Exception:
                         pass
 
+                cursor.execute(
+                    """
+                    SELECT agent_name, agent_input, agent_output, created_at, updated_at
+                    FROM ai_agent_traces
+                    WHERE username = ? AND period_id_1 = ? AND period_id_2 = ? AND model = ? AND audience = ?
+                    ORDER BY agent_name ASC
+                    """,
+                    (username, period_id_1, period_id_2, model, audience),
+                )
+                trace_rows = cursor.fetchall()
+                if trace_rows:
+                    agent_trace: Dict[str, Any] = {}
+                    for agent_name, agent_input, agent_output, created_at, updated_at in trace_rows:
+                        try:
+                            decoded_input = json.loads(agent_input) if agent_input else None
+                        except Exception:
+                            decoded_input = agent_input
+                        try:
+                            decoded_output = json.loads(agent_output) if agent_output else None
+                        except Exception:
+                            decoded_output = agent_output
+
+                        agent_trace[str(agent_name)] = {
+                            "input": decoded_input,
+                            "output": decoded_output,
+                            "created_at": created_at,
+                            "updated_at": updated_at,
+                        }
+                    record["agent_trace"] = agent_trace
+
                 return record
         except Exception as e:
             print(f"Error retrieving AI analysis run: {e}")
             return None
+
+    def get_ai_analysis_runs_for_pair(
+        self,
+        username: str,
+        period_id_1: str,
+        period_id_2: str,
+        include_reversed: bool = True,
+    ) -> List[Dict[str, Any]]:
+        """Return all cached AI runs for a pair of period IDs (optionally both directions)."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                if include_reversed:
+                    cursor.execute(
+                        """
+                        SELECT
+                            username,
+                            period_id_1,
+                            period_id_2,
+                            model,
+                            audience,
+                            anamnesis,
+                            json_filepath,
+                            json_input,
+                            pipeline_outputs,
+                            final_result,
+                            created_at,
+                            updated_at
+                        FROM ai_analysis_runs
+                        WHERE username = ?
+                          AND (
+                                (period_id_1 = ? AND period_id_2 = ?)
+                             OR (period_id_1 = ? AND period_id_2 = ?)
+                          )
+                        ORDER BY COALESCE(updated_at, created_at) DESC
+                        """,
+                        (username, period_id_1, period_id_2, period_id_2, period_id_1),
+                    )
+                else:
+                    cursor.execute(
+                        """
+                        SELECT
+                            username,
+                            period_id_1,
+                            period_id_2,
+                            model,
+                            audience,
+                            anamnesis,
+                            json_filepath,
+                            json_input,
+                            pipeline_outputs,
+                            final_result,
+                            created_at,
+                            updated_at
+                        FROM ai_analysis_runs
+                        WHERE username = ? AND period_id_1 = ? AND period_id_2 = ?
+                        ORDER BY COALESCE(updated_at, created_at) DESC
+                        """,
+                        (username, period_id_1, period_id_2),
+                    )
+
+                columns = [description[0] for description in cursor.description]
+                rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+                for record in rows:
+                    for key in ("json_input", "pipeline_outputs"):
+                        try:
+                            record[key] = json.loads(record[key]) if record.get(key) else None
+                        except Exception:
+                            pass
+
+                return rows
+        except Exception as e:
+            print(f"Error retrieving AI analysis run history: {e}")
+            return []
     
     def save_anamnesis(self, record_id: str, text: str) -> bool:
         """Save or update the anamnesis text for a record."""
