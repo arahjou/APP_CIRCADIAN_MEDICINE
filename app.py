@@ -1,10 +1,11 @@
 import streamlit as st
 import streamlit.components.v1 as components
-from datetime import datetime
+from datetime import datetime, timedelta
 import sqlite3
 import os
 import json
 import pandas as pd
+import uuid
 # utils
 from tools.upload_file import upload_file, get_available_dates, filter_data_by_dates
 from tools.database import ActigraphDB
@@ -26,8 +27,12 @@ from tools.light_IS_IV import compute_rolling_2day_is_iv_light
 from tools.light_L5_M10_RA import compute_daily_L5_M10_RA_light
 from tools.light_cosinor import fit_cosinor_daily_activity as fit_cosinor_daily_light
 from tools.light_CPD import calculate_cpd_light
-from tools.report_generator import generate_comparison_report, save_json_report
-from tools.llm_conversation import analyze_circadian_report, get_intermediate_results, save_analysis, continue_conversation
+from tools.llm_conversation import save_analysis, continue_conversation
+from tools.settings import get_settings
+from tools.app_logging import log_event
+from services.analysis_service import data_quality_report
+from services.report_service import build_comparison, persist_report_json
+from services.ai_pipeline_service import run_ai_pipeline
 
 
 AI_ANALYSIS_DIRNAME = "ai_analyses"
@@ -113,46 +118,41 @@ def _load_previous_ai_analyses_for_user(username: str) -> list[dict]:
     entries.sort(key=_sort_key, reverse=True)
     return entries
 
-# --- USER AUTHENTICATION ---
+def check_login(db: ActigraphDB, username: str, password: str) -> bool:
+    return db.verify_user_password(username=username, password=password)
 
-import hashlib, hmac, os as _os
 
-def _hash_password(password: str, salt: bytes) -> str:
-    """PBKDF2-HMAC-SHA256 hash of password with given salt."""
-    dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 260_000)
-    return dk.hex()
-
-def _make_entry(password: str) -> dict:
-    salt = _os.urandom(16)
-    return {"salt": salt.hex(), "hash": _hash_password(password, salt)}
-
-# Passwords are stored as PBKDF2-HMAC-SHA256 hashes — never in plaintext.
-# To add/change a user run:  python3 -c "from app import _make_entry; import json; print(json.dumps(_make_entry('newpassword')))"
-# then paste the resulting dict here.
-USERS: dict[str, dict] = {
-    "user1": {"salt": "a3f1c29e4d8b0571", "hash": _hash_password("password123", bytes.fromhex("a3f1c29e4d8b0571"))},
-    "user2": {"salt": "7e6d4b2a1c9f3085", "hash": _hash_password("password456", bytes.fromhex("7e6d4b2a1c9f3085"))},
-}
-
-def check_login(username: str, password: str) -> bool:
-    """Returns True if the username and password are correct."""
-    entry = USERS.get(username)
-    if not entry:
+def _is_session_expired(settings) -> bool:
+    last_activity = st.session_state.get("last_activity_at")
+    if not last_activity:
         return False
-    salt = bytes.fromhex(entry["salt"])
-    return hmac.compare_digest(_hash_password(password, salt), entry["hash"])
+    return datetime.now() - last_activity > timedelta(minutes=settings.session_timeout_minutes)
 
 def main():
+    settings = get_settings()
+    db = ActigraphDB(db_path=settings.db_path)
+
     # Initialize session state if not already done
     if 'logged_in' not in st.session_state:
         st.session_state['logged_in'] = False
         st.session_state['username'] = ''
+        st.session_state['last_activity_at'] = datetime.now()
+
+    if st.session_state.get("logged_in") and _is_session_expired(settings):
+        user = st.session_state.get("username", "")
+        st.session_state['logged_in'] = False
+        st.session_state['username'] = ''
+        st.session_state['last_activity_at'] = datetime.now()
+        db.add_audit_log("session_expired", username=user, details={"timeout_minutes": settings.session_timeout_minutes})
+        st.warning("Session expired due to inactivity. Please log in again.")
+        st.rerun()
     
     # --- LOGIN FORM ---
     if not st.session_state['logged_in']:
         st.set_page_config(page_title="Login - Circadian Medicine App", layout="centered")
         st.title("🔐 Login to Circadian Medicine App")
         st.markdown("---")
+        st.caption("Research-use only. This application is not a diagnostic medical device.")
 
         with st.form("login_form"):
             username = st.text_input("Username").lower()
@@ -160,27 +160,47 @@ def main():
             submitted = st.form_submit_button("Login", type="primary")
 
             if submitted:
-                if check_login(username, password):
+                locked, remain = db.is_locked_out(
+                    username=username,
+                    max_attempts=settings.max_login_attempts,
+                    window_minutes=settings.login_window_minutes,
+                    lockout_minutes=settings.lockout_minutes,
+                )
+                if locked:
+                    st.error(f"Too many failed attempts. Try again in {max(1, remain // 60)} minute(s).")
+                    db.add_audit_log("login_blocked", username=username, details={"remaining_seconds": remain})
+                    return
+
+                if check_login(db, username, password):
                     st.session_state['logged_in'] = True
                     st.session_state['username'] = username
+                    st.session_state['last_activity_at'] = datetime.now()
+                    db.record_login_attempt(username, True)
+                    db.add_audit_log("login_success", username=username)
+                    log_event("login_success", username=username)
                     st.rerun()  # Rerun the script to show the main app
                 else:
+                    db.record_login_attempt(username, False)
+                    db.add_audit_log("login_failed", username=username)
+                    log_event("login_failed", username=username)
                     st.error("😕 Incorrect username or password.")
+        if not db.user_exists("admin"):
+            st.info("No admin user found. Run: `python scripts/bootstrap_admin.py --username admin --password <strong-password>`")
         return  # Exit if not logged in
     
     # --- MAIN APPLICATION (Only accessible after login) ---
     st.set_page_config(page_title="Circadian Medicine Analysis", page_icon="🔬", layout="wide")
+    st.session_state["last_activity_at"] = datetime.now()
+    st.warning("Research-only / non-diagnostic output. Clinical decisions require licensed medical judgment.")
     
     # Display a sidebar with user info and logout button
     with st.sidebar:
         st.success(f"Welcome, **{st.session_state['username']}**! 👋")
         if st.button("Log Out", type="primary"):
+            db.add_audit_log("logout", username=st.session_state.get("username", ""))
             st.session_state['logged_in'] = False
             st.session_state['username'] = ''
             st.rerun()
-    
-    # Initialize database
-    db = ActigraphDB()
     
     image = 'image/Circadian Medicine.png'
     st.image(image, width='stretch')
@@ -195,6 +215,9 @@ def main():
     ])
     
     with tab1:
+        st.markdown("### Workflow")
+        st.progress(0.2, text="Step 1/5: Upload")
+        st.caption("Wizard path: Upload → Validate → Analyze → Compare → Evidence Report")
         # Add input fields for ID, Description, and Date
         st.subheader("Analysis Information")
         
@@ -227,6 +250,17 @@ def main():
         # Process the uploaded file
         data = upload_file(df)
         if data is not None:
+            st.progress(0.4, text="Step 2/5: Validate")
+            dq = data_quality_report(data)
+            with st.expander("Data quality check", expanded=True):
+                st.write(f"Date coverage (days): **{dq['date_coverage_days']}**")
+                st.write(f"Timezone present: **{dq['timezone_present']}**")
+                st.write(f"Median sampling interval (minutes): **{dq['sampling_minutes_median']}**")
+                if dq["missing_columns"]:
+                    st.error(f"Missing expected columns: {', '.join(dq['missing_columns'])}")
+                elif dq["ok"]:
+                    st.success("Data quality checks passed.")
+
             # Get available dates from the data
             available_dates = get_available_dates(data)
  # Block for date selection and analysis         
@@ -246,6 +280,7 @@ def main():
                 submit_button = st.button("Run Analysis", type="primary")
                 
                 if selected_dates and submit_button:
+                    run_id = uuid.uuid4().hex[:12]
                     # Validate required fields
                     if not analysis_id or not description:
                         st.error("❌ Please provide both Analysis ID and Description before running analysis.")
@@ -270,6 +305,12 @@ def main():
                         st.stop()
                     
                     st.success(f"✅ Analysis record '{analysis_id}' saved to database.")
+                    db.add_audit_log(
+                        "new_analysis_started",
+                        username=st.session_state.get("username", ""),
+                        run_id=run_id,
+                        details={"analysis_id": analysis_id, "selected_dates": selected_dates},
+                    )
                     
                     # Filter data by selected dates
                     filtered_data = filter_data_by_dates(data, selected_dates)
@@ -486,6 +527,12 @@ def main():
                     
                     # Analysis completion message
                     st.success(f"🎉 Analysis completed successfully! All results have been saved to database with ID: {analysis_id}")
+                    db.add_audit_log(
+                        "new_analysis_completed",
+                        username=st.session_state.get("username", ""),
+                        run_id=run_id,
+                        details={"analysis_id": analysis_id},
+                    )
 # End of analysis block
                 elif selected_dates and not submit_button:
                     st.info("Click 'Run Analysis' to start the analysis with your selected dates.")
@@ -516,7 +563,14 @@ def main():
                     st.error("Please select two different records to compare.")
                 else:
                     with st.spinner("Generating comparison report..."):
-                        report_html, _, _ = generate_comparison_report([id1, id2])
+                        run_id = uuid.uuid4().hex[:12]
+                        report_html, _, _ = build_comparison([id1, id2])
+                        db.add_audit_log(
+                            "comparison_report_generated",
+                            username=st.session_state.get("username", ""),
+                            run_id=run_id,
+                            details={"id1": id1, "id2": id2},
+                        )
                         if report_html:
                             components.html(report_html, height=800, scrolling=True)
                         else:
@@ -653,7 +707,7 @@ def main():
         # Model selection
         model_option = st.selectbox(
             "Select LLM Model",
-            options=["phi4:14b", "llama3.2", "gemma3:12b", "qwen3:8b", "qwen3.5:9b", "qwen3.5:4b"],
+            options=settings.allowed_models,
             help="Choose the Ollama model for analysis"
         )
 
@@ -736,8 +790,10 @@ def main():
                     "data_summary": pipeline_outputs.get("data_summary", ""),
                     "search_queries": pipeline_outputs.get("search_queries", []),
                     "raw_abstracts": pipeline_outputs.get("raw_abstracts", ""),
+                    "evidence_items": pipeline_outputs.get("evidence_items", []),
                     "lit_summary": pipeline_outputs.get("lit_summary", ""),
                     "symptom_metric_table": pipeline_outputs.get("symptom_metric_table", ""),
+                    "claim_to_pmid_map": pipeline_outputs.get("claim_to_pmid_map", {}),
                 }
             else:
                 st.session_state.pipeline_intermediates = None
@@ -806,13 +862,13 @@ def main():
                         
                         # Step 1: Generate report data
                         with st.spinner("⏳ Generating report data..."):
-                            report_html, df_combined, json_data = generate_comparison_report([ai_id1, ai_id2])
+                            report_html, df_combined, json_data = build_comparison([ai_id1, ai_id2])
                             
                             if isinstance(report_html, str) and "No data found" in report_html:
                                 st.error(report_html)
                             elif json_data is not None:
                                 # Step 2: Save JSON
-                                json_filepath = save_json_report(json_data)
+                                json_filepath = persist_report_json(json_data)
                                 st.session_state.json_filepath = json_filepath
                                 st.success(f"✅ Report data generated and saved to {os.path.basename(json_filepath)}")
 
@@ -823,30 +879,55 @@ def main():
 
                                 agent_count = "6" if effective_anamnesis else "5"
                                 with st.spinner(f"🤖 Running {agent_count}-agent AI pipeline (2–5 min)..."):
-                                    results = get_intermediate_results(
-                                        json_filepath,
+                                    run_id, results = run_ai_pipeline(
+                                        json_filepath=json_filepath,
                                         model=model_option,
                                         audience=audience_key,
                                         anamnesis=effective_anamnesis,
                                         progress_callback=_pipeline_progress,
                                     )
+                                db.add_audit_log(
+                                    "ai_report_generation_attempt",
+                                    username=st.session_state.get("username", ""),
+                                    run_id=run_id,
+                                    details={
+                                        "period_1": ai_id1,
+                                        "period_2": ai_id2,
+                                        "model": model_option,
+                                        "audience": audience_key,
+                                    },
+                                )
 
                                 pipeline_status.empty()
 
+                                analysis = results.get("final_report", "")
                                 if "error" in results:
-                                    analysis = f"Error: {results['error']}"
-                                else:
-                                    analysis = results["final_report"]
-                                    # Store intermediates in session state for collapsible display
-                                    st.session_state.pipeline_intermediates = {
-                                        "data_summary":         results["data_summary"],
-                                        "search_queries":       results["search_queries"],
-                                        "raw_abstracts":        results["raw_abstracts"],
-                                        "lit_summary":          results["lit_summary"],
-                                        "symptom_metric_table": results.get("symptom_metric_table", ""),
-                                    }
+                                    st.warning(f"Pipeline used fallback mode: {results['error']}")
+
+                                # Store intermediates in session state for collapsible display
+                                st.session_state.pipeline_intermediates = {
+                                    "data_summary":         results.get("data_summary", ""),
+                                    "search_queries":       results.get("search_queries", []),
+                                    "raw_abstracts":        results.get("raw_abstracts", ""),
+                                    "evidence_items":       results.get("evidence_items", []),
+                                    "lit_summary":          results.get("lit_summary", ""),
+                                    "symptom_metric_table": results.get("symptom_metric_table", ""),
+                                    "claim_to_pmid_map":    results.get("claim_to_pmid_map", {}),
+                                }
 
                                 if analysis and not analysis.startswith("Error"):
+                                    db.add_audit_log(
+                                        "ai_report_generated",
+                                        username=st.session_state.get("username", ""),
+                                        run_id=run_id,
+                                        details={
+                                            "period_1": ai_id1,
+                                            "period_2": ai_id2,
+                                            "model": model_option,
+                                            "audience": audience_key,
+                                            "fallback_used": "error" in results,
+                                        },
+                                    )
                                     # Persist full AI run to DB (JSON input, all agent outputs, and final report).
                                     save_ok = db.save_ai_analysis_run(
                                         username=st.session_state.get("username") or "unknown",
@@ -860,6 +941,7 @@ def main():
                                         pipeline_outputs=results,
                                         final_result=analysis,
                                         agent_trace=results.get("agent_trace") if isinstance(results, dict) else None,
+                                        schema_version="v2",
                                     )
                                     if not save_ok:
                                         st.warning("⚠️ Could not save AI pipeline details to database.")
@@ -933,16 +1015,35 @@ def main():
             # Collapsible pipeline intermediates
             if st.session_state.get("pipeline_intermediates"):
                 pi = st.session_state.pipeline_intermediates
-                with st.expander("🔍 View pipeline intermediates", expanded=False):
+                with st.expander("🧾 Evidence Confidence Panel", expanded=True):
+                    st.markdown("**Query intents (Agent 2)**")
+                    for q in pi.get("search_queries", []):
+                        if isinstance(q, dict):
+                            st.markdown(
+                                f"- topic=`{q.get('topic')}` | population=`{q.get('population')}` | context=`{q.get('context')}`"
+                            )
+                        else:
+                            st.markdown(f"- `{q}`")
+                    evidence_items = pi.get("evidence_items", [])
+                    st.markdown(
+                        f"**Included evidence items:** {len(evidence_items)}  \n"
+                        "Filters: fielded query + humans/adults constraints + lexical rank + LLM relevance judge"
+                    )
+                    if evidence_items:
+                        st.dataframe(pd.DataFrame(evidence_items)[["pmid", "year", "score", "query_source", "title"]])
+
+                with st.expander("🔍 View pipeline intermediates", expanded=settings.show_raw_pipeline_traces):
                     st.markdown("**Data summary (Agent 1)**")
                     st.text(pi.get("data_summary", ""))
-                    st.markdown("**Search queries used (Agent 2)**")
-                    for q in pi.get("search_queries", []):
-                        st.markdown(f"- `{q}`")
                     st.markdown("**PubMed abstracts retrieved (Agent 3)**")
                     st.text(pi.get("raw_abstracts", "")[:3000] + ("…" if len(pi.get("raw_abstracts", "")) > 3000 else ""))
                     st.markdown("**Literature synthesis (Agent 4)**")
                     st.text(pi.get("lit_summary", ""))
+                    claim_map = pi.get("claim_to_pmid_map", {})
+                    if claim_map:
+                        st.markdown("**Claim to PMID map (grounding)**")
+                        for claim, pmids in claim_map.items():
+                            st.markdown(f"- {claim}  \n  PMIDs: {', '.join(pmids)}")
                     symptom_table = pi.get("symptom_metric_table", "")
                     if symptom_table:
                         st.markdown("**Symptom-Metric Correlation (Agent 6)**")

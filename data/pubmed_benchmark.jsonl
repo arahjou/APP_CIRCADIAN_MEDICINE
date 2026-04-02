@@ -1,0 +1,20 @@
+{"id":"case01","question":"Low SRI and daytime fatigue","topic":"sleep regularity index","context":"fatigue daytime","population":"adults","expected_terms":["sleep regularity","fatigue"]}
+{"id":"case02","question":"High IV and metabolic risk","topic":"intradaily variability","context":"metabolic syndrome","population":"adults","expected_terms":["intradaily variability","metabolic"]}
+{"id":"case03","question":"Low IS cardiovascular outcomes","topic":"interdaily stability","context":"cardiovascular risk","population":"humans","expected_terms":["interdaily stability","cardiovascular"]}
+{"id":"case04","question":"Late acrophase depression","topic":"delayed circadian phase","context":"depressive symptoms","population":"adults","expected_terms":["circadian phase","depression"]}
+{"id":"case05","question":"Nocturnal light exposure insomnia","topic":"nocturnal light exposure","context":"insomnia","population":"adults","expected_terms":["light at night","insomnia"]}
+{"id":"case06","question":"Melanopic EDI and phase delay","topic":"melanopic illuminance","context":"phase delay","population":"humans","expected_terms":["melanopic","phase delay"]}
+{"id":"case07","question":"Sleep fragmentation cognition","topic":"sleep fragmentation","context":"cognitive function","population":"adults","expected_terms":["sleep fragmentation","cognition"]}
+{"id":"case08","question":"Shift work circadian misalignment","topic":"shift work","context":"circadian misalignment","population":"adults","expected_terms":["shift work","misalignment"]}
+{"id":"case09","question":"Actigraphy RA mortality","topic":"relative amplitude actigraphy","context":"mortality risk","population":"humans","expected_terms":["relative amplitude","mortality"]}
+{"id":"case10","question":"CPD and mood instability","topic":"circadian phase dispersion","context":"mood symptoms","population":"adults","expected_terms":["phase variability","mood"]}
+{"id":"case11","question":"Morning light therapy","topic":"morning bright light","context":"circadian entrainment","population":"adults","expected_terms":["morning light","entrainment"]}
+{"id":"case12","question":"Evening light restriction","topic":"evening light restriction","context":"sleep onset","population":"adults","expected_terms":["evening light","sleep onset"]}
+{"id":"case13","question":"Social jetlag metabolic effects","topic":"social jetlag","context":"metabolic health","population":"adults","expected_terms":["social jetlag","metabolic"]}
+{"id":"case14","question":"Chronotype and depression","topic":"chronotype eveningness","context":"depression","population":"adults","expected_terms":["chronotype","depression"]}
+{"id":"case15","question":"Actigraphy and hypertension","topic":"actigraphy sleep metrics","context":"hypertension","population":"adults","expected_terms":["actigraphy","hypertension"]}
+{"id":"case16","question":"Sleep regularity glycemic control","topic":"sleep regularity","context":"glycemic control","population":"adults","expected_terms":["sleep regularity","glucose"]}
+{"id":"case17","question":"Circadian disruption cancer risk","topic":"circadian disruption","context":"cancer risk","population":"humans","expected_terms":["circadian disruption","cancer"]}
+{"id":"case18","question":"Daytime sleepiness and irregular rhythm","topic":"irregular sleep wake rhythm","context":"daytime sleepiness","population":"adults","expected_terms":["irregular rhythm","sleepiness"]}
+{"id":"case19","question":"Light timing obesity","topic":"light timing","context":"obesity risk","population":"adults","expected_terms":["light timing","obesity"]}
+{"id":"case20","question":"SRI and psychiatric symptoms","topic":"sleep regularity index","context":"psychiatric symptoms","population":"adults","expected_terms":["SRI","psychiatric"]}

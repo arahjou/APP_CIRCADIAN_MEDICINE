@@ -13,3 +13,9 @@ langchain-core>=0.2.0
 
 # Optional: For better performance
 pyarrow>=14.0.0
+cryptography>=42.0.0
+
+# Quality / CI
+pytest>=8.2.0
+ruff>=0.6.0
+mypy>=1.11.0

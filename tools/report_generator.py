@@ -3,6 +3,7 @@ import sqlite3
 import json
 import os
 from datetime import datetime, timedelta
+from tools.settings import get_settings
 
 def generate_comparison_report(ids):
     """
@@ -19,7 +20,8 @@ def generate_comparison_report(ids):
     )
 
     # 2) Next, get sleep_light_exposure details for each ID
-    db_path = os.path.join(os.getcwd(), 'Actigraph_record.db')
+    settings = get_settings()
+    db_path = settings.db_path
     conn = sqlite3.connect(db_path)
     query = "SELECT record_id, results FROM sleep_analysis WHERE analysis_type='sleep_light_exposure'"
     df_sleep_light = pd.read_sql_query(query, conn)

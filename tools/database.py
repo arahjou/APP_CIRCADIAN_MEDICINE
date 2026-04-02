@@ -6,8 +6,10 @@ Handles SQLite operations for storing and retrieving analysis records
 import sqlite3
 import json
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
+import hashlib
+import hmac
 import os
 
 class ActigraphDB:
@@ -22,6 +24,7 @@ class ActigraphDB:
         """Create database tables if they don't exist"""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
+            cursor.execute("PRAGMA foreign_keys = ON")
             
             # Main analysis records table
             cursor.execute('''
@@ -31,7 +34,8 @@ class ActigraphDB:
                     date TEXT,
                     created_at TEXT,
                     file_name TEXT,
-                    selected_dates TEXT
+                    selected_dates TEXT,
+                    anamnesis TEXT
                 )
             ''')
             
@@ -78,6 +82,7 @@ class ActigraphDB:
                     json_input TEXT,
                     pipeline_outputs TEXT,
                     final_result TEXT,
+                    schema_version TEXT,
                     created_at TEXT,
                     updated_at TEXT,
                     PRIMARY KEY (username, period_id_1, period_id_2, model, audience)
@@ -100,14 +105,60 @@ class ActigraphDB:
                     PRIMARY KEY (username, period_id_1, period_id_2, model, audience, agent_name)
                 )
             ''')
-            
-            # Migrate existing databases — add anamnesis column if it doesn't exist yet
+
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS app_users (
+                    username TEXT PRIMARY KEY,
+                    salt TEXT NOT NULL,
+                    password_hash TEXT NOT NULL,
+                    role TEXT NOT NULL DEFAULT 'clinician',
+                    is_active INTEGER NOT NULL DEFAULT 1,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+            ''')
+
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS auth_login_attempts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT NOT NULL,
+                    success INTEGER NOT NULL,
+                    attempt_time TEXT NOT NULL
+                )
+            ''')
+
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS app_audit_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    event_type TEXT NOT NULL,
+                    username TEXT,
+                    run_id TEXT,
+                    details TEXT,
+                    created_at TEXT NOT NULL
+                )
+            ''')
+
+            # Migrations for existing DBs
             try:
                 cursor.execute("ALTER TABLE analysis_records ADD COLUMN anamnesis TEXT")
             except sqlite3.OperationalError:
-                pass  # column already exists
+                pass
+            try:
+                cursor.execute("ALTER TABLE ai_analysis_runs ADD COLUMN schema_version TEXT")
+            except sqlite3.OperationalError:
+                pass
 
             conn.commit()
+
+    @staticmethod
+    def _hash_password(password: str, salt: bytes) -> str:
+        dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 260_000)
+        return dk.hex()
+
+    @staticmethod
+    def _make_password_entry(password: str) -> tuple[str, str]:
+        salt = os.urandom(16)
+        return salt.hex(), ActigraphDB._hash_password(password, salt)
 
     def save_ai_analysis_run(
         self,
@@ -122,6 +173,7 @@ class ActigraphDB:
         pipeline_outputs: Any,
         final_result: str,
         agent_trace: Optional[Dict[str, Any]] = None,
+        schema_version: str = "v2",
     ) -> bool:
         """Insert or replace an AI analysis run for the same user/period pair/model/audience."""
         try:
@@ -166,9 +218,10 @@ class ActigraphDB:
                         json_input,
                         pipeline_outputs,
                         final_result,
+                        schema_version,
                         created_at,
                         updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         username,
@@ -181,6 +234,7 @@ class ActigraphDB:
                         json_input_blob,
                         pipeline_outputs_blob,
                         final_result,
+                        schema_version,
                         created_at,
                         now,
                     ),
@@ -276,6 +330,7 @@ class ActigraphDB:
                         json_input,
                         pipeline_outputs,
                         final_result,
+                        schema_version,
                         created_at,
                         updated_at
                     FROM ai_analysis_runs
@@ -356,6 +411,7 @@ class ActigraphDB:
                             json_input,
                             pipeline_outputs,
                             final_result,
+                            schema_version,
                             created_at,
                             updated_at
                         FROM ai_analysis_runs
@@ -382,6 +438,7 @@ class ActigraphDB:
                             json_input,
                             pipeline_outputs,
                             final_result,
+                            schema_version,
                             created_at,
                             updated_at
                         FROM ai_analysis_runs
@@ -405,6 +462,131 @@ class ActigraphDB:
         except Exception as e:
             print(f"Error retrieving AI analysis run history: {e}")
             return []
+
+    def create_or_update_user(self, username: str, password: str, role: str = "clinician") -> bool:
+        """Create user or rotate password."""
+        try:
+            salt_hex, hash_hex = self._make_password_entry(password)
+            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO app_users (username, salt, password_hash, role, is_active, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, 1, ?, ?)
+                    ON CONFLICT(username) DO UPDATE SET
+                        salt = excluded.salt,
+                        password_hash = excluded.password_hash,
+                        role = excluded.role,
+                        is_active = 1,
+                        updated_at = excluded.updated_at
+                    """,
+                    (username.strip().lower(), salt_hex, hash_hex, role, now, now),
+                )
+                conn.commit()
+                return True
+        except Exception as e:
+            print(f"Error creating/updating user: {e}")
+            return False
+
+    def verify_user_password(self, username: str, password: str) -> bool:
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT salt, password_hash, is_active FROM app_users WHERE username = ?",
+                    (username.strip().lower(),),
+                )
+                row = cursor.fetchone()
+                if not row:
+                    return False
+                salt_hex, expected_hash, is_active = row
+                if int(is_active) != 1:
+                    return False
+                actual = self._hash_password(password, bytes.fromhex(str(salt_hex)))
+                return hmac.compare_digest(actual, str(expected_hash))
+        except Exception as e:
+            print(f"Error verifying user password: {e}")
+            return False
+
+    def user_exists(self, username: str) -> bool:
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT 1 FROM app_users WHERE username = ? AND is_active = 1",
+                    (username.strip().lower(),),
+                )
+                return cursor.fetchone() is not None
+        except Exception:
+            return False
+
+    def is_locked_out(
+        self,
+        username: str,
+        max_attempts: int,
+        window_minutes: int,
+        lockout_minutes: int,
+    ) -> tuple[bool, int]:
+        """
+        Returns (locked, remaining_seconds).
+        Lockout occurs when failed attempts in window >= max_attempts.
+        """
+        uname = username.strip().lower()
+        now = datetime.now()
+        window_start = (now - timedelta(minutes=window_minutes)).strftime("%Y-%m-%d %H:%M:%S")
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT attempt_time
+                    FROM auth_login_attempts
+                    WHERE username = ? AND success = 0 AND attempt_time >= ?
+                    ORDER BY attempt_time DESC
+                    """,
+                    (uname, window_start),
+                )
+                rows = [r[0] for r in cursor.fetchall()]
+                if len(rows) < max_attempts:
+                    return False, 0
+                latest = datetime.strptime(rows[0], "%Y-%m-%d %H:%M:%S")
+                unlock_at = latest + timedelta(minutes=lockout_minutes)
+                if now < unlock_at:
+                    return True, int((unlock_at - now).total_seconds())
+                return False, 0
+        except Exception as e:
+            print(f"Error checking lockout: {e}")
+            return False, 0
+
+    def record_login_attempt(self, username: str, success: bool) -> None:
+        uname = username.strip().lower()
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute(
+                    "INSERT INTO auth_login_attempts (username, success, attempt_time) VALUES (?, ?, ?)",
+                    (uname, 1 if success else 0, now),
+                )
+                conn.commit()
+        except Exception as e:
+            print(f"Error recording login attempt: {e}")
+
+    def add_audit_log(self, event_type: str, username: str = "", run_id: str = "", details: Dict[str, Any] | None = None) -> None:
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        details_blob = json.dumps(details or {}, default=str)
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute(
+                    """
+                    INSERT INTO app_audit_logs (event_type, username, run_id, details, created_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (event_type, (username or "").strip().lower(), run_id, details_blob, now),
+                )
+                conn.commit()
+        except Exception as e:
+            print(f"Error writing audit log: {e}")
     
     def save_anamnesis(self, record_id: str, text: str) -> bool:
         """Save or update the anamnesis text for a record."""

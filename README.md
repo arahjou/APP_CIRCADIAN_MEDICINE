@@ -118,17 +118,10 @@ streamlit run app.py
 
 Open your browser at `http://localhost:8501`.
 
-Default credentials (change before deployment):
-| Username | Password |
-|----------|----------|
-| user1 | password123 |
-| user2 | password456 |
-
-> **Security note:** To add a new user or change passwords, run:
+> **Production security update:** credentials are now DB-backed. Bootstrap an admin with:
 > ```bash
-> python -c "from app import _make_entry; import json; print(json.dumps(_make_entry('your_new_password')))"
+> python scripts/bootstrap_admin.py --username admin --password '<strong-password>'
 > ```
-> then add the resulting dict to the `USERS` dictionary in `app.py`.
 
 ---
 
@@ -156,6 +149,47 @@ Sample data files are provided in the `data/` directory.
 2. **Previous Analyses** tab — Browse, review, and export stored analyses.
 3. **Compare Records** tab — Select two or more record IDs to generate a side-by-side comparison report (JSON).
 4. **AI Analysis** tab — Select two record IDs, choose a target audience (expert / doctor / layperson) and Ollama model, then run the pipeline to generate a literature-grounded clinical report. For Doctor and Expert audiences, optionally enter a patient anamnesis — this activates Agent 6, which maps each reported symptom to the most relevant metric change and supporting PubMed evidence, and flags symptoms with no literature match.
+
+---
+
+## Production Configuration (MVP)
+
+Configure via environment variables:
+
+```bash
+export APP_ENV=prod
+export DB_PATH=Actigraph_record.db
+export NCBI_API_KEY=...
+export ALLOWED_MODELS=phi4:14b,llama3.2,qwen3.5:9b
+export SESSION_TIMEOUT_MINUTES=30
+export MAX_LOGIN_ATTEMPTS=5
+export LOGIN_WINDOW_MINUTES=15
+export LOCKOUT_MINUTES=15
+export SHOW_RAW_PIPELINE_TRACES=0
+```
+
+Backup and integrity check (encrypted):
+
+```bash
+export DB_BACKUP_KEY='<long-random-secret>'
+python scripts/backup_db.py --db Actigraph_record.db --out-dir backups
+```
+
+Run retrieval benchmark:
+
+```bash
+python scripts/evaluate_pubmed_retrieval.py
+```
+
+---
+
+## Release Checklist
+
+1. Run `pytest -q tests` and `python stress_test.py`
+2. Run `python scripts/evaluate_pubmed_retrieval.py` and review `precision@5`
+3. Verify `python scripts/backup_db.py ...` succeeds
+4. Validate DB migration on a copy of production DB
+5. Tag release and keep rollback artifact (previous tagged commit + DB backup)
 
 ---
 

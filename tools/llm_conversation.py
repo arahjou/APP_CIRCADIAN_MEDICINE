@@ -28,13 +28,14 @@ from __future__ import annotations
 import json
 import os
 import re
-from typing import TypedDict, Callable
+from typing import TypedDict, Callable, Any
 
 from langchain_ollama import ChatOllama
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langgraph.graph import StateGraph, END
 
-from tools.pubmed_search import search_pubmed
+from tools.pubmed_search import search_pubmed, evidence_to_text, RetrievalConfig
+from tools.app_logging import log_event
 
 
 # ---------------------------------------------------------------------------
@@ -46,12 +47,14 @@ class PipelineState(TypedDict):
     json_filepath: str
     compact_report: str           # Agent 1 input (flattened metrics)
     data_summary: str             # Agent 1 output
-    search_queries: list[str]     # Agent 2 output
+    search_queries: list[dict]    # Agent 2 output
     raw_abstracts: str            # Agent 3 output
     pmid_list: list[str]          # Agent 3 output — PubMed IDs of retrieved articles
+    evidence_items: list[dict]    # Agent 3 output - structured evidence records
     lit_summary: str              # Agent 4 output
     anamnesis: str                # Doctor/Expert input — patient history & symptoms
     symptom_metric_table: str     # Agent 6 output — symptom → metric → literature map
+    claim_to_pmid_map: dict[str, list[str]]  # Agent 5 grounding map
     audience: str                 # "expert" | "doctor" | "layperson"
     final_report: str             # Agent 5 output
     model: str                    # Ollama model name for main agents
@@ -106,27 +109,37 @@ def _notify(state: PipelineState, msg: str) -> None:
 # Query validation helpers (Task 1)
 # ---------------------------------------------------------------------------
 
-_QUERY_STRIP_RE = re.compile(
-    r'^(?:\d+[.):\-]\s*|[-•*–—]\s*|["\'])',  # leading numbering / bullets / quotes
-    re.UNICODE,
-)
-
-
-def _clean_queries(raw_text: str) -> list[str]:
+def _parse_structured_queries(raw_text: str) -> list[dict]:
     """
-    Parse LLM output into clean PubMed-ready search queries.
-
-    Removes common LLM-output artefacts (numbering, bullets, markdown quotes)
-    and validates that each query is a plausible MeSH-style phrase (2–8 words,
-    under 100 characters). Returns up to 5 cleaned queries.
+    Agent 2 now returns one JSON object per line:
+    {"topic":"...", "population":"...", "context":"...", "expected_link":"..."}
     """
-    queries: list[str] = []
+    queries: list[dict] = []
     for line in raw_text.splitlines():
-        q = _QUERY_STRIP_RE.sub("", line).strip().strip("\'\"")
-        # Must look like a keyword phrase: 2–8 words, reasonable length
-        if 2 <= len(q.split()) <= 8 and 5 < len(q) <= 100:
-            queries.append(q)
-        if len(queries) == 5:
+        cleaned = line.strip().strip("`")
+        if not cleaned:
+            continue
+        try:
+            obj = json.loads(cleaned)
+        except Exception:
+            continue
+        if not isinstance(obj, dict):
+            continue
+        topic = str(obj.get("topic") or "").strip()
+        context = str(obj.get("context") or "").strip()
+        population = str(obj.get("population") or "humans").strip()
+        expected_link = str(obj.get("expected_link") or "").strip()
+        if len(topic.split()) < 2 or len(context.split()) < 1:
+            continue
+        queries.append(
+            {
+                "topic": topic,
+                "population": population,
+                "context": context,
+                "expected_link": expected_link,
+            }
+        )
+        if len(queries) >= 5:
             break
     return queries
 
@@ -136,48 +149,45 @@ def _clean_queries(raw_text: str) -> list[str]:
 # ---------------------------------------------------------------------------
 
 _RELEVANCE_SYSTEM = """You are a biomedical relevance filter.
-You will receive PubMed abstracts and the search queries that retrieved them.
-Your task: return ONLY the abstract blocks that are genuinely relevant to
-circadian rhythms, sleep, actigraphy, light exposure, or chronobiology.
+Input:
+1) structured PubMed evidence items (PMID + title + abstract + lexical score)
+2) the clinical summary and query intents
 
-Rules:
-- Keep each block that clearly relates to the clinical context.
-- Remove blocks that are off-topic due to keyword ambiguity.
-- Preserve each kept block exactly as given (PMID, TITLE, ABSTRACT lines intact),
-  separated by ---
-- If all blocks are relevant, return them unchanged.
-- If none are relevant, return: No relevant abstracts found.
-- Output ONLY the filtered blocks — no commentary."""
+Output:
+- Return ONLY a JSON array of PMIDs that should be kept.
+- Keep evidence directly relevant to circadian rhythm, sleep regularity, actigraphy, light exposure, or chronobiology.
+- Prefer higher-quality clinical relevance over broad background biology.
+- If none are relevant, return [].
+No explanation."""
 
 
-def _filter_relevant_abstracts(
-    abstracts: str,
-    queries: list[str],
+def _llm_keep_pmids(
+    *,
+    evidence_items: list[dict],
+    queries: list[dict],
+    summary: str,
     fast_model: str,
-) -> str:
-    """
-    Use a fast local LLM to remove PubMed abstracts that are not relevant
-    to the circadian/sleep context implied by the search queries.
-    Falls back to the original text if the model call fails.
-    """
-    if not abstracts or abstracts.startswith("No PubMed"):
-        return abstracts
+) -> set[str]:
+    if not evidence_items:
+        return set()
     user_content = (
-        f"Search queries: {'; '.join(queries)}\n\n"
-        f"---\n\n{abstracts}"
+        f"Clinical summary:\n{summary}\n\n"
+        f"Query intents:\n{json.dumps(queries, ensure_ascii=False)}\n\n"
+        f"Evidence items:\n{json.dumps(evidence_items, ensure_ascii=False)}"
     )
     try:
-        filtered = _chat(
+        raw = _chat(
             model_name=fast_model,
             system=_RELEVANCE_SYSTEM,
             user=user_content,
             temperature=0.0,
         )
-        if filtered and len(filtered) > 80:
-            return filtered
+        parsed = json.loads(raw)
+        if isinstance(parsed, list):
+            return {str(x) for x in parsed}
     except Exception:
         pass
-    return abstracts
+    return set()
 
 
 def _chat(model_name: str, system: str, user: str, temperature: float = 0.2) -> str:
@@ -202,27 +212,25 @@ Rules:
 - Limit your response to approximately 400 words."""
 
 _AGENT2_SYSTEM = """You are a biomedical literature search specialist.
-Given a clinical summary of actigraphy data, extract PubMed search queries.
+Given a clinical summary of actigraphy data, extract PubMed query intents.
 
 Rules:
-- Use MeSH-style keyword phrases (2–5 words per query).
+- Output EXACTLY one compact JSON object per line with keys:
+  {"topic":"...", "population":"...", "context":"...", "expected_link":"..."}
+- Use MeSH-friendly terms in topic/context.
 - Focus on the most abnormal or clinically notable findings from the summary.
-- Each query should target a distinct aspect of the findings.
-- Output ONLY the queries, one per line, no numbering, no explanation.
-- Example format:
-circadian rhythm sleep irregularity actigraphy
-interdaily stability actigraphy cardiovascular risk
-light exposure melanopic circadian alignment"""
+- Each object should target a distinct aspect.
+- topic should be 2–7 words, context 1–6 words, population typically humans/adults.
+- Output ONLY JSON lines, no markdown, no commentary."""
 
 _AGENT2_ANAMNESIS_ADDENDUM = """
 Additional context — Patient anamnesis (reported symptoms/history):
 {anamnesis}
 
 Because an anamnesis is available, generate a MIXED query set:
-- 3 queries focused on the most abnormal circadian/sleep metrics (as above)
-- 2 additional queries that COMBINE a reported symptom with a relevant metric change
-  (e.g., "sleep fragmentation fatigue daytime", "circadian misalignment depression mood")
-Total: exactly 5 queries, one per line, no numbering."""
+- 3 query objects focused on the most abnormal circadian/sleep metrics
+- 2 additional query objects that combine a symptom with a metric change
+Total: exactly 5 JSON lines."""
 
 _AGENT6_SYSTEM = """You are a clinical evidence mapper for a circadian medicine report.
 You will receive:
@@ -369,7 +377,7 @@ def agent2_keyword_extractor(state: PipelineState) -> PipelineState:
     # Build user message — add anamnesis addendum when available
     base_user = (
         f"# Clinical Data Summary\n{state['data_summary']}\n\n"
-        "Output PubMed search queries, one per line."
+        "Output JSON lines query intents."
     )
     if anamnesis:
         base_user = (
@@ -391,29 +399,46 @@ def agent2_keyword_extractor(state: PipelineState) -> PipelineState:
             user=base_user,
             temperature=0.1,
         )
-    # clean and validate LLM-generated queries before they hit PubMed
-    queries = _clean_queries(queries_text)
+    queries = _parse_structured_queries(queries_text)
     if not queries:
-        queries = ["circadian rhythm actigraphy", "sleep irregularity health outcomes"]
+        queries = [
+            {
+                "topic": "circadian rhythm actigraphy",
+                "population": "humans",
+                "context": "sleep irregularity",
+                "expected_link": "circadian instability and daytime symptoms",
+            },
+            {
+                "topic": "light exposure melanopic",
+                "population": "humans",
+                "context": "phase alignment",
+                "expected_link": "light timing and circadian phase",
+            },
+        ]
     return {**state, "search_queries": queries}
 
 
 def agent3_literature_search(state: PipelineState) -> PipelineState:
     _notify(state, "📚 Agent 3/5: Searching PubMed for relevant literature...")
-    # Task 3: search_pubmed now returns (text, pmids)
-    abstracts, pmids = search_pubmed(state["search_queries"])
-    if not abstracts:
-        abstracts = "No PubMed abstracts found for the given search terms."
-        pmids = []
-    else:
-        # Task 2: filter out off-topic abstracts using a fast local LLM
-        _notify(state, "🔍 Agent 3/5: Validating relevance of retrieved abstracts...")
-        abstracts = _filter_relevant_abstracts(
-            abstracts,
-            state["search_queries"],
+    cfg = RetrievalConfig(
+        years_back=10 if state.get("audience") != "expert" else 15,
+        adults_only=state.get("audience") == "doctor",
+    )
+    evidence_items = search_pubmed(state["search_queries"], config=cfg)
+    if evidence_items:
+        _notify(state, "🔍 Agent 3/5: Running secondary relevance judge...")
+        # Stage 1 lexical ranking is done by search_pubmed; stage 2 is lightweight LLM judge.
+        keep_pmids = _llm_keep_pmids(
+            evidence_items=evidence_items,
+            queries=state["search_queries"],
+            summary=state.get("data_summary", ""),
             fast_model="llama3.2",
         )
-    return {**state, "raw_abstracts": abstracts, "pmid_list": pmids}
+        if keep_pmids:
+            evidence_items = [x for x in evidence_items if str(x.get("pmid")) in keep_pmids]
+    raw_abstracts = evidence_to_text(evidence_items)
+    pmids = [str(x.get("pmid")) for x in evidence_items if x.get("pmid")]
+    return {**state, "raw_abstracts": raw_abstracts, "pmid_list": pmids, "evidence_items": evidence_items}
 
 
 def agent4_literature_synthesiser(state: PipelineState) -> PipelineState:
@@ -446,6 +471,7 @@ def agent5_report_writer(state: PipelineState) -> PipelineState:
         f"# Actigraphy Data Context\n{state['compact_report']}\n\n"
         f"# Clinical Data Summary\n{state['data_summary']}\n\n"
         f"# Supporting Literature Evidence\n{state['lit_summary']}\n\n"
+        f"# Evidence Items (use PMIDs from here only)\n{json.dumps(state.get('evidence_items') or [], ensure_ascii=False)}\n\n"
     )
     symptom_table = state.get("symptom_metric_table", "").strip()
     if symptom_table:
@@ -454,7 +480,10 @@ def agent5_report_writer(state: PipelineState) -> PipelineState:
             "When writing the report, include a section titled \'Symptom-Metric Correlation\' "
             "that incorporates the table above and highlights any unexplained symptoms.\n\n"
         )
-    user_content += "Write the final report now."
+    user_content += (
+        "Write the final report now.\n"
+        "Every evidence-backed claim must include PMID in parentheses, and PMIDs must come from evidence items above."
+    )
 
     final_report = _chat(
         model_name=state["model"],
@@ -464,12 +493,18 @@ def agent5_report_writer(state: PipelineState) -> PipelineState:
     )
     # append a references section with PubMed links for cited PMIDs
     pmids = state.get("pmid_list") or []
+    claim_to_pmid_map: dict[str, list[str]] = {}
+    for line in final_report.splitlines():
+        if "(PMID" in line:
+            cited = re.findall(r"PMID\\s*(\\d+)", line)
+            if cited:
+                claim_to_pmid_map[line.strip()[:180]] = cited
     if pmids:
         ref_lines = ["\n\n---\nReferences (PubMed):"]
         for i, pmid in enumerate(pmids, start=1):
             ref_lines.append(f"{i}. PMID {pmid} — https://pubmed.ncbi.nlm.nih.gov/{pmid}/")
         final_report = final_report + "\n".join(ref_lines)
-    return {**state, "final_report": final_report}
+    return {**state, "final_report": final_report, "claim_to_pmid_map": claim_to_pmid_map}
 
 
 def agent6_symptom_metric_linker(state: PipelineState) -> PipelineState:
@@ -567,9 +602,11 @@ def analyze_circadian_report(
         "search_queries":      [],
         "raw_abstracts":       "",
         "pmid_list":           [],
+        "evidence_items":      [],
         "lit_summary":         "",
         "anamnesis":           anamnesis.strip(),
         "symptom_metric_table": "",
+        "claim_to_pmid_map":   {},
         "audience":            audience,
         "final_report":        "",
         "model":               model,
@@ -579,7 +616,14 @@ def analyze_circadian_report(
         final_state = _GRAPH.invoke(initial_state)
         return final_state["final_report"]
     except Exception as e:
-        return f"Error during pipeline: {e}"
+        # deterministic fallback: no narrative hallucination, only data/evidence summary.
+        fallback = (
+            "Fallback report (deterministic):\n\n"
+            f"Data summary:\n{initial_state['compact_report'][:3000]}\n\n"
+            "Evidence summary:\nNo reliable LLM synthesis available for this run."
+        )
+        log_event("ai_pipeline_fallback", error=str(e))
+        return fallback
 
 
 def get_intermediate_results(
@@ -611,9 +655,11 @@ def get_intermediate_results(
         "search_queries":       [],
         "raw_abstracts":        "",
         "pmid_list":            [],
+        "evidence_items":       [],
         "lit_summary":          "",
         "anamnesis":            anamnesis.strip(),
         "symptom_metric_table": "",
+        "claim_to_pmid_map":    {},
         "audience":             audience,
         "final_report":         "",
         "model":                model,
@@ -647,6 +693,7 @@ def get_intermediate_results(
                 "output": {
                     "raw_abstracts": final_state["raw_abstracts"],
                     "pmid_list": final_state["pmid_list"],
+                    "evidence_items": final_state.get("evidence_items", []),
                 },
             },
             "agent4_literature_synthesiser": {
@@ -665,6 +712,7 @@ def get_intermediate_results(
                     "lit_summary": final_state["lit_summary"],
                     "symptom_metric_table": final_state.get("symptom_metric_table", ""),
                     "pmid_list": final_state["pmid_list"],
+                    "claim_to_pmid_map": final_state.get("claim_to_pmid_map", {}),
                     "audience": final_state["audience"],
                 },
                 "output": {
@@ -694,13 +742,37 @@ def get_intermediate_results(
             "search_queries":       final_state["search_queries"],
             "raw_abstracts":        final_state["raw_abstracts"],
             "pmid_list":            final_state["pmid_list"],
+            "evidence_items":       final_state.get("evidence_items", []),
             "lit_summary":          final_state["lit_summary"],
             "symptom_metric_table": final_state["symptom_metric_table"],
+            "claim_to_pmid_map":    final_state.get("claim_to_pmid_map", {}),
             "final_report":         final_state["final_report"],
             "agent_trace":          agent_trace,
         }
     except Exception as e:
-        return {"error": f"Error during pipeline: {e}"}
+        fallback_report = (
+            "Fallback report (deterministic):\n\n"
+            f"Data summary:\n{initial_state['compact_report'][:3000]}\n\n"
+            "Evidence summary:\nNo reliable LLM synthesis available for this run."
+        )
+        log_event("ai_pipeline_fallback", error=str(e))
+        return {
+            "json_filepath": initial_state["json_filepath"],
+            "audience": audience,
+            "model": model,
+            "anamnesis": anamnesis,
+            "data_summary": "",
+            "search_queries": [],
+            "raw_abstracts": "No PubMed abstracts found for the given search terms.",
+            "pmid_list": [],
+            "evidence_items": [],
+            "lit_summary": "",
+            "symptom_metric_table": "",
+            "claim_to_pmid_map": {},
+            "final_report": fallback_report,
+            "agent_trace": {},
+            "error": f"Error during pipeline: {e}",
+        }
 
 
 def save_analysis(analysis_text: str, filename: str = "llm_analysis.txt") -> str:
