@@ -1,0 +1,40 @@
+## Summary:
+The analysis of actigraphy data across two periods reveals a notable increase in light exposure and sleep duration, with shifts towards earlier mid-sleep times. These changes suggest improved alignment of circadian rhythms and sleep health, despite minor social jetlag.
+
+## 1) Circadian Rhythm Parameters:
+- **Interdaily Stability (IS):** Increased slightly from 0.21 to 0.22 (Δ = +0.01), indicating marginally enhanced consistency in daily activity patterns.
+- **Intradaily Variability (IV):** Remained constant at 0.52, suggesting stable variability within days.
+- **Relative Amplitude (RA):** Unchanged at 0.78, reflecting consistent contrast between active and inactive periods.
+
+## 2) Sleep Architecture Indicators:
+- **Mid-Sleep:** Shifted significantly earlier from 0.54 to 0.13 (Δ = -0.41), indicating a potential alignment with circadian phases.
+- **Sleep Duration:** Increased notably by 42 minutes, suggesting improved sleep health or efficiency.
+
+## 3) Light Exposure Analysis:
+- **Daytime/Nocturnal Melanopic EDI:** Mesors increased significantly from 22.87 to 48.9 (Δ = +26.03), indicating enhanced overall light exposure.
+- **Phase Alignment Implications:** The increase in CPD3 (Δ = +0.99) suggests a longer duration of light exposure, potentially advancing circadian phases.
+
+## 4) Phase & Cosinor Analysis:
+- **Acrophase and Mesor:** Decreased mesor from 37.39 to 35.67 (Δ = -1.72), indicating reduced overall activity levels.
+- **Cosinor Period Duration (CPD2):** Remained constant at 1.29, suggesting stable circadian period length.
+
+## 5) Literature-Supported Associations:
+- Increased light exposure and longer sleep durations are associated with improved circadian alignment (PMID not available).
+- Minor social jetlag persists despite improvements in sleep duration and earlier mid-sleep times (PMID not available).
+
+## 6) Clinical Recommendations:
+- **Light Exposure Management:** Maintain consistent light exposure patterns to support circadian alignment.
+- **Sleep Schedule Alignment:** Encourage alignment of sleep schedules with natural circadian phases to reduce social jetlag.
+
+## Symptom-Metric Correlation:
+
+|Symptom|Relevant Metric Change|Evidence Support|PMID|
+|---|---|---|---|
+|Increased energy levels|Increase in light exposure (Δ = +26.03)|No direct evidence found|—|
+|Improved short-term memory weakness|Not clearly linked to any metric change|No direct evidence found|—|
+|Improved daytime concentration|Increase in sleep duration (Δ = +42.0)|No direct evidence found|—|
+|Better ability to complete tasks|Decrease in circadian period mid-sleep (Δ = -0.41)|No direct evidence found|—|
+
+Unexplained symptoms include increased energy levels, improved short-term memory weakness, improved daytime concentration, and better ability to complete tasks, with no supporting literature available.
+
+This report highlights the importance of light exposure and sleep duration in circadian health, suggesting targeted interventions for optimizing these parameters.
