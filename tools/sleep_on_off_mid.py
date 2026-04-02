@@ -8,12 +8,13 @@ def analyze_sleep_periods(data):
     
     # =============================================================================
     # sleep state analysis
-    # Calculate the rolling average for PIMn
-    # min_periods=1 ensures sleep state is defined from the first sample
-    data['PIMn_avg'] = data['PIMn'].rolling(window=100, min_periods=1).mean()
-
-    # Define sleep state based on the average PIMn
-    data['Sleep_State'] = data['PIMn_avg'].apply(lambda x: 1 if x < 6 else 0)
+    # Prefer manually edited sleep state from the editor when available.
+    if 'SLEEP_STATE' in data.columns:
+        data['Sleep_State'] = pd.to_numeric(data['SLEEP_STATE'], errors='coerce').fillna(0).clip(0, 1).astype(int)
+    else:
+        # Fallback: estimate sleep state from activity counts.
+        data['PIMn_avg'] = data['PIMn'].rolling(window=100, min_periods=1).mean()
+        data['Sleep_State'] = data['PIMn_avg'].apply(lambda x: 1 if x < 6 else 0)
 
     # 1. DATA CLEANING: Fill Short Gaps in Sleep Periods
     data['DATE/TIME'] = pd.to_datetime(data['DATE/TIME'])

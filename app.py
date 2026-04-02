@@ -33,6 +33,7 @@ from tools.app_logging import log_event
 from services.analysis_service import data_quality_report
 from services.report_service import build_comparison, persist_report_json
 from services.ai_pipeline_service import run_ai_pipeline
+from tools.sleep_editor import run_sleep_editor, infer_sleep_state_from_pimn
 
 
 AI_ANALYSIS_DIRNAME = "ai_analyses"
@@ -261,8 +262,114 @@ def main():
                 elif dq["ok"]:
                     st.success("Data quality checks passed.")
 
+            file_key = f"{getattr(df, 'name', 'uploaded_file')}:{len(data)}"
+            working_key = f"tab1_working_data::{file_key}"
+            original_key = f"tab1_original_data::{file_key}"
+            preprocess_key = f"tab1_preprocess_complete::{file_key}"
+            mode_key = f"tab1_preprocess_mode::{file_key}"
+            sleep_inferred_key = f"tab1_sleep_inferred::{file_key}"
+            confirm_edited_key = f"tab1_confirm_edited::{file_key}"
+
+            if working_key not in st.session_state:
+                initialized_data = data.copy(deep=True)
+                sleep_inferred = False
+                if "SLEEP_STATE" not in initialized_data.columns:
+                    initialized_data["SLEEP_STATE"] = infer_sleep_state_from_pimn(initialized_data)
+                    sleep_inferred = True
+                initialized_data["SLEEP_STATE"] = (
+                    pd.to_numeric(initialized_data["SLEEP_STATE"], errors="coerce")
+                    .fillna(0)
+                    .astype(int)
+                    .clip(0, 1)
+                )
+                if "EDITED" not in initialized_data.columns:
+                    initialized_data["EDITED"] = False
+                else:
+                    initialized_data["EDITED"] = initialized_data["EDITED"].fillna(False).astype(bool)
+
+                st.session_state[original_key] = initialized_data.copy(deep=True)
+                st.session_state[working_key] = initialized_data.copy(deep=True)
+                st.session_state[preprocess_key] = False
+                st.session_state[mode_key] = "pending"
+                st.session_state[sleep_inferred_key] = sleep_inferred
+                st.session_state[confirm_edited_key] = False
+
+            # ------------------------------------------------------------------
+            # Step 3 — preprocess decision gate before date selection
+            # ------------------------------------------------------------------
+            st.progress(0.5, text="Step 3/5: Preprocess")
+            st.subheader("🛏️ Sleep Segment Preprocess")
+            st.caption("Choose one path before date selection.")
+
+            if st.session_state.get(sleep_inferred_key, False):
+                st.info("SLEEP_STATE was missing and has been auto-detected from PIMn.")
+
+            if st.session_state[mode_key] == "pending":
+                gate_col1, gate_col2 = st.columns(2)
+                with gate_col1:
+                    continue_detected = st.button(
+                        "Continue with detected sleep",
+                        use_container_width=True,
+                        key=f"continue_detected_{file_key}",
+                    )
+                with gate_col2:
+                    edit_first = st.button(
+                        "Edit sleep bouts first",
+                        use_container_width=True,
+                        key=f"edit_first_{file_key}",
+                    )
+
+                if continue_detected:
+                    st.session_state[working_key] = st.session_state[original_key].copy(deep=True)
+                    st.session_state[preprocess_key] = True
+                    st.session_state[mode_key] = "detected"
+                    st.session_state[confirm_edited_key] = False
+
+                if edit_first:
+                    st.session_state[working_key] = st.session_state[original_key].copy(deep=True)
+                    st.session_state[preprocess_key] = False
+                    st.session_state[mode_key] = "edited"
+                    st.session_state[confirm_edited_key] = False
+
+            if st.session_state[mode_key] == "edited":
+                st.info("Edit sleep bouts, then click the confirmation button to continue.")
+                st.session_state[working_key] = run_sleep_editor(
+                    st.session_state[working_key],
+                    source_key=file_key,
+                    show_export=False,
+                )
+                if st.button(
+                    "Use edited sleep and continue",
+                    type="primary",
+                    use_container_width=True,
+                    key=f"use_edited_continue_{file_key}",
+                ):
+                    st.session_state[confirm_edited_key] = True
+                    st.session_state[preprocess_key] = True
+
+                if not st.session_state.get(confirm_edited_key, False):
+                    st.warning("Confirm edited sleep to continue.")
+                    st.stop()
+
+            if st.session_state[mode_key] == "pending":
+                st.warning("Choose how to proceed with sleep preprocessing to continue.")
+                st.stop()
+
+            if not st.session_state[preprocess_key]:
+                st.warning("Complete preprocess decision to continue to date selection.")
+                st.stop()
+
+            edited_rows_count = int(st.session_state[working_key].get("EDITED", pd.Series(dtype=int)).sum())
+            if st.session_state[mode_key] == "edited":
+                st.success(f"Using EDITED data ({edited_rows_count} rows updated).")
+            else:
+                st.info("Using detected/current sleep labels without manual edits.")
+            st.divider()
+
+            edited_data = st.session_state[working_key]
+
             # Get available dates from the data
-            available_dates = get_available_dates(data)
+            available_dates = get_available_dates(edited_data)
  # Block for date selection and analysis         
             if available_dates:
                 st.subheader("Date Selection")
@@ -309,11 +416,19 @@ def main():
                         "new_analysis_started",
                         username=st.session_state.get("username", ""),
                         run_id=run_id,
-                        details={"analysis_id": analysis_id, "selected_dates": selected_dates},
+                        details={
+                            "analysis_id": analysis_id,
+                            "selected_dates": selected_dates,
+                            "data_source_mode": st.session_state.get(mode_key, "unknown"),
+                            "edited_rows": edited_rows_count,
+                        },
                     )
                     
                     # Filter data by selected dates
-                    filtered_data = filter_data_by_dates(data, selected_dates)
+                    filtered_data = filter_data_by_dates(edited_data, selected_dates)
+
+                    if "SLEEP_STATE" in filtered_data.columns:
+                        st.info("Sleep analyses are using the current SLEEP_STATE labels (including editor corrections).")
                     
                     st.subheader(f"Analysis for {len(selected_dates)} selected date(s)")
                     
@@ -377,6 +492,7 @@ def main():
                             filtered_data,  # Use filtered_data instead of data
                             timestamp_col='DATE/TIME',
                             pimn_col='PIMn',
+                            sleep_state_col='SLEEP_STATE',
                             window_days=2,
                             slide_interval=1,
                             rolling_window=100,

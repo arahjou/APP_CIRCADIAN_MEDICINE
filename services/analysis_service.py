@@ -7,8 +7,6 @@ REQUIRED_COLUMNS = {
     "DATE/TIME",
     "PIMn",
     "MELANOPIC EDI",
-    "WHITE LIGHT (LUX)",
-    "SLEEP/WAKE",
 }
 
 

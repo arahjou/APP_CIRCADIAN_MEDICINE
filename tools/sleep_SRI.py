@@ -5,6 +5,7 @@ def calculate_sri_from_pimn(
     df: pd.DataFrame,
     timestamp_col: str,
     pimn_col: str,
+    sleep_state_col: str | None = None,
     window_days: int = 2,
     slide_interval: int = 1,
     rolling_window: int = 100,
@@ -12,12 +13,12 @@ def calculate_sri_from_pimn(
     local_tz: str = "Europe/Berlin",  # use local wall clock
 ) -> pd.DataFrame:
     """
-    Compute SRI for a single participant from raw PIMn.
+    Compute SRI for a single participant.
 
     Steps:
       1) Convert timestamps to local_tz, then drop tz (wall clock alignment).
-      2) PIMn_avg = rolling mean over `rolling_window` (NaN until window filled).
-      3) Sleep_State = 1 if PIMn_avg < sleep_threshold else 0 (NaNs kept).
+        2) If `sleep_state_col` is provided/present, use it as Sleep_State.
+            Otherwise, compute PIMn_avg and derive Sleep_State from threshold.
       4) Pivot by date x time and compute SRI over sliding windows.
     """
     if window_days < 2:
@@ -43,11 +44,15 @@ def calculate_sri_from_pimn(
     # Chronological order before rolling
     df = df.sort_values(timestamp_col)
 
-    # --- Rolling mean & sleep state ---
-    df["PIMn_avg"] = df[pimn_col].rolling(window=rolling_window).mean()  # NaN until full window
-    sleep_state = (df["PIMn_avg"] < sleep_threshold).astype("float")
-    sleep_state[df["PIMn_avg"].isna()] = np.nan
-    df["Sleep_State"] = sleep_state
+    # --- Sleep state source ---
+    selected_sleep_state_col = sleep_state_col if sleep_state_col else ("SLEEP_STATE" if "SLEEP_STATE" in df.columns else None)
+    if selected_sleep_state_col and selected_sleep_state_col in df.columns:
+        df["Sleep_State"] = pd.to_numeric(df[selected_sleep_state_col], errors="coerce").clip(0, 1).astype("float")
+    else:
+        df["PIMn_avg"] = df[pimn_col].rolling(window=rolling_window).mean()  # NaN until full window
+        sleep_state = (df["PIMn_avg"] < sleep_threshold).astype("float")
+        sleep_state[df["PIMn_avg"].isna()] = np.nan
+        df["Sleep_State"] = sleep_state
 
     # --- Daily pivot ---
     df["date"] = df[timestamp_col].dt.date

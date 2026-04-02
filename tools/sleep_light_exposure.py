@@ -23,8 +23,13 @@ def analyze_sleep_light_exposure(df_subset):
     # 2. FEATURE ENGINEERING
     # =========================================================================
     print("Step 2: Performing feature engineering...")
-    df['PIMn_avg'] = df['PIMn'].rolling(window=100, min_periods=1).mean()
-    df['Sleep_State'] = np.where(df['PIMn_avg'] < 6, 1, 0)
+    if 'SLEEP_STATE' in df.columns:
+        # Use the corrected sleep labels from the editor when provided.
+        df['Sleep_State'] = pd.to_numeric(df['SLEEP_STATE'], errors='coerce').fillna(0).clip(0, 1).astype(int)
+    else:
+        # Fallback to activity-derived state estimation.
+        df['PIMn_avg'] = df['PIMn'].rolling(window=100, min_periods=1).mean()
+        df['Sleep_State'] = np.where(df['PIMn_avg'] < 6, 1, 0)
 
     df['MELANOPIC EDI_avg'] = df['MELANOPIC EDI'].rolling(window=50, min_periods=1).mean()
     conditions = [
