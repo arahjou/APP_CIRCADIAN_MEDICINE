@@ -6,6 +6,7 @@ import os
 import json
 import pandas as pd
 import uuid
+import matplotlib.pyplot as plt
 # utils
 from tools.upload_file import upload_file, get_available_dates, filter_data_by_dates
 from tools.database import ActigraphDB
@@ -33,7 +34,7 @@ from tools.app_logging import log_event
 from services.analysis_service import data_quality_report
 from services.report_service import build_comparison, persist_report_json
 from services.ai_pipeline_service import run_ai_pipeline
-from tools.sleep_editor import run_sleep_editor, infer_sleep_state_from_pimn
+from tools.sleep_editor import run_sleep_editor, infer_sleep_state_from_pimn, infer_sleep_state_roenneberg
 
 
 AI_ANALYSIS_DIRNAME = "ai_analyses"
@@ -269,6 +270,10 @@ def main():
             mode_key = f"tab1_preprocess_mode::{file_key}"
             sleep_inferred_key = f"tab1_sleep_inferred::{file_key}"
             confirm_edited_key = f"tab1_confirm_edited::{file_key}"
+            roenn_threshold_key = f"tab1_roenn_threshold::{file_key}"
+            roenn_seed_key = f"tab1_roenn_min_seed::{file_key}"
+            roenn_epoch_key = f"tab1_roenn_epoch::{file_key}"
+            roenn_gap_key = f"tab1_roenn_gap_cap::{file_key}"
 
             if working_key not in st.session_state:
                 initialized_data = data.copy(deep=True)
@@ -293,6 +298,10 @@ def main():
                 st.session_state[mode_key] = "pending"
                 st.session_state[sleep_inferred_key] = sleep_inferred
                 st.session_state[confirm_edited_key] = False
+                st.session_state[roenn_threshold_key] = 0.15
+                st.session_state[roenn_seed_key] = 30
+                st.session_state[roenn_epoch_key] = 1
+                st.session_state[roenn_gap_key] = 30
 
             # ------------------------------------------------------------------
             # Step 3 — preprocess decision gate before date selection
@@ -302,7 +311,118 @@ def main():
             st.caption("Choose one path before date selection.")
 
             if st.session_state.get(sleep_inferred_key, False):
-                st.info("SLEEP_STATE was missing and has been auto-detected from PIMn.")
+                st.info("SLEEP_STATE was missing and has been auto-detected using Roenneberg.")
+
+            with st.expander("Roenneberg controls", expanded=False):
+                rc1, rc2, rc3, rc4 = st.columns(4)
+                with rc1:
+                    st.session_state[roenn_threshold_key] = st.number_input(
+                        "Threshold",
+                        min_value=0.01,
+                        max_value=1.0,
+                        value=float(st.session_state.get(roenn_threshold_key, 0.15)),
+                        step=0.01,
+                        format="%.2f",
+                        key=f"roenn_threshold_input_{file_key}",
+                    )
+                with rc2:
+                    st.session_state[roenn_seed_key] = int(st.number_input(
+                        "Min seed (min)",
+                        min_value=1,
+                        max_value=240,
+                        value=int(st.session_state.get(roenn_seed_key, 30)),
+                        step=1,
+                        key=f"roenn_seed_input_{file_key}",
+                    ))
+                with rc3:
+                    st.session_state[roenn_epoch_key] = int(st.number_input(
+                        "Epoch (min)",
+                        min_value=1,
+                        max_value=30,
+                        value=int(st.session_state.get(roenn_epoch_key, 1)),
+                        step=1,
+                        key=f"roenn_epoch_input_{file_key}",
+                    ))
+                with rc4:
+                    st.session_state[roenn_gap_key] = int(st.number_input(
+                        "Impute gap cap (min)",
+                        min_value=0,
+                        max_value=240,
+                        value=int(st.session_state.get(roenn_gap_key, 30)),
+                        step=1,
+                        key=f"roenn_gap_input_{file_key}",
+                    ))
+
+                if st.button("Rerun Roenneberg detection", key=f"rerun_roenn_{file_key}", use_container_width=True):
+                    rerun_base = st.session_state[working_key].copy(deep=True)
+                    rerun_base["SLEEP_STATE"] = infer_sleep_state_roenneberg(
+                        rerun_base,
+                        threshold_frac=float(st.session_state[roenn_threshold_key]),
+                        min_seed_min=int(st.session_state[roenn_seed_key]),
+                        analysis_epoch_min=int(st.session_state[roenn_epoch_key]),
+                        max_imputable_gap_minutes=int(st.session_state[roenn_gap_key]),
+                    )
+                    if "EDITED" not in rerun_base.columns:
+                        rerun_base["EDITED"] = False
+                    rerun_base["EDITED"] = False
+                    st.session_state[working_key] = rerun_base.copy(deep=True)
+                    st.session_state[original_key] = rerun_base.copy(deep=True)
+                    st.session_state[sleep_inferred_key] = True
+                    st.success("Roenneberg detection rerun with current parameters.")
+                    st.rerun()
+
+            # Always show a read-only preview so users can decide whether to edit.
+            preview_df = st.session_state[working_key].copy(deep=True)
+            if not preview_df.empty and "DATE/TIME" in preview_df.columns:
+                preview_signal_candidates = ["PIMn", "activity", "ENMO"]
+                preview_signal = next((c for c in preview_signal_candidates if c in preview_df.columns), None)
+                if preview_signal is None:
+                    numeric_cols = [
+                        c for c in preview_df.select_dtypes(include="number").columns
+                        if c not in ["SLEEP_STATE", "EDITED"]
+                    ]
+                    preview_signal = numeric_cols[0] if numeric_cols else None
+
+                if preview_signal is not None:
+                    st.markdown("Detected sleep preview")
+                    st.caption(f"{preview_signal} with detected sleep windows shaded in green")
+
+                    plot_df = preview_df.copy()
+                    plot_df["DATE/TIME"] = pd.to_datetime(plot_df["DATE/TIME"], errors="coerce")
+                    plot_df = plot_df.dropna(subset=["DATE/TIME"]).sort_values("DATE/TIME")
+
+                    fig, ax = plt.subplots(figsize=(12, 3.2))
+                    ax.plot(
+                        plot_df["DATE/TIME"],
+                        pd.to_numeric(plot_df[preview_signal], errors="coerce").fillna(0),
+                        color="#1f77b4",
+                        linewidth=1.0,
+                    )
+
+                    sleep_mask = pd.to_numeric(
+                        plot_df.get("SLEEP_STATE", pd.Series(0, index=plot_df.index)),
+                        errors="coerce",
+                    ).fillna(0).astype(int).eq(1)
+                    times = plot_df["DATE/TIME"].to_list()
+                    in_sleep = False
+                    span_start = None
+                    for i, is_sleep in enumerate(sleep_mask.to_list()):
+                        if is_sleep and not in_sleep:
+                            span_start = times[i]
+                            in_sleep = True
+                        elif not is_sleep and in_sleep:
+                            ax.axvspan(span_start, times[i], color="seagreen", alpha=0.18, lw=0)
+                            in_sleep = False
+                            span_start = None
+                    if in_sleep and span_start is not None and times:
+                        ax.axvspan(span_start, times[-1], color="seagreen", alpha=0.18, lw=0)
+
+                    ax.set_title("Detected sleep overlay preview")
+                    ax.set_xlabel("Time")
+                    ax.set_ylabel(preview_signal)
+                    ax.grid(alpha=0.25)
+                    st.pyplot(fig, use_container_width=True)
+                    plt.close(fig)
 
             if st.session_state[mode_key] == "pending":
                 gate_col1, gate_col2 = st.columns(2)
@@ -320,7 +440,8 @@ def main():
                     )
 
                 if continue_detected:
-                    st.session_state[working_key] = st.session_state[original_key].copy(deep=True)
+                    # Keep the currently previewed detected labels (including any reruns).
+                    st.session_state[working_key] = st.session_state[working_key].copy(deep=True)
                     st.session_state[preprocess_key] = True
                     st.session_state[mode_key] = "detected"
                     st.session_state[confirm_edited_key] = False
@@ -387,6 +508,20 @@ def main():
                 submit_button = st.button("Run Analysis", type="primary")
                 
                 if selected_dates and submit_button:
+                    # Hard guard: analysis must use pre-approved sleep labels only.
+                    if "SLEEP_STATE" not in edited_data.columns:
+                        st.error("❌ SLEEP_STATE is missing. Please complete Roenneberg detection or sleep editing before running analysis.")
+                        st.stop()
+
+                    normalized_sleep_state = pd.to_numeric(edited_data["SLEEP_STATE"], errors="coerce")
+                    if normalized_sleep_state.isna().all():
+                        st.error("❌ SLEEP_STATE is invalid (all values are missing). Please rerun Roenneberg detection or confirm edited sleep labels.")
+                        st.stop()
+
+                    # Normalize once here so all downstream analyses consume consistent binary labels.
+                    edited_data = edited_data.copy(deep=True)
+                    edited_data["SLEEP_STATE"] = normalized_sleep_state.fillna(0).astype(int).clip(0, 1)
+
                     run_id = uuid.uuid4().hex[:12]
                     # Validate required fields
                     if not analysis_id or not description:

@@ -8,8 +8,12 @@ def activity_plotter(df_subset):
     # Calculate the rolling average for PIMn (min_periods=1 avoids NaN at start)
     df_subset['PIMn_avg'] = df_subset['PIMn'].rolling(window=100, min_periods=1).mean()
 
-    # Define sleep state based on the average PIMn
-    df_subset['Sleep_State'] = df_subset['PIMn_avg'].apply(lambda x: 1 if x < 6 else 0)
+    # Use externally provided sleep labels when available (Roenneberg/editor output).
+    # Fallback to heuristic only if SLEEP_STATE is missing.
+    if 'SLEEP_STATE' in df_subset.columns:
+        df_subset['Sleep_State'] = pd.to_numeric(df_subset['SLEEP_STATE'], errors='coerce').fillna(0).clip(0, 1).astype(int)
+    else:
+        df_subset['Sleep_State'] = df_subset['PIMn_avg'].apply(lambda x: 1 if x < 6 else 0)
 
     plt.figure(figsize=(12, 6), dpi=200)
     plt.plot(df_subset['DATE/TIME'], df_subset['PIMn'], label='PIMn', color = "black")

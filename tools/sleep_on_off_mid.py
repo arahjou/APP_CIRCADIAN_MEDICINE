@@ -10,8 +10,10 @@ def analyze_sleep_periods(data):
     # sleep state analysis
     # Prefer manually edited sleep state from the editor when available.
     if 'SLEEP_STATE' in data.columns:
+        used_fallback_sleep_state = False
         data['Sleep_State'] = pd.to_numeric(data['SLEEP_STATE'], errors='coerce').fillna(0).clip(0, 1).astype(int)
     else:
+        used_fallback_sleep_state = True
         # Fallback: estimate sleep state from activity counts.
         data['PIMn_avg'] = data['PIMn'].rolling(window=100, min_periods=1).mean()
         data['Sleep_State'] = data['PIMn_avg'].apply(lambda x: 1 if x < 6 else 0)
@@ -20,17 +22,18 @@ def analyze_sleep_periods(data):
     data['DATE/TIME'] = pd.to_datetime(data['DATE/TIME'])
     data = data.sort_values("DATE/TIME").reset_index(drop=True)
 
-    # --- Fill short sleep gaps (< 2 hours) ---
-    initial_transitions = data['Sleep_State'].diff()
-    wake_up_indices = initial_transitions[initial_transitions == -1].index
-    sleep_onset_indices = initial_transitions[initial_transitions == 1].index
-    for wake_idx in wake_up_indices:
-        next_sleep_onsets = sleep_onset_indices[sleep_onset_indices > wake_idx]
-        if not next_sleep_onsets.empty:
-            next_sleep_idx = next_sleep_onsets[0]
-            duration = data.loc[next_sleep_idx, 'DATE/TIME'] - data.loc[wake_idx, 'DATE/TIME']
-            if duration < pd.Timedelta(hours=2):
-                data.loc[wake_idx:next_sleep_idx-1, 'Sleep_State'] = 1
+    # --- Fill short sleep gaps (< 2 hours) only for fallback-generated labels ---
+    if used_fallback_sleep_state:
+        initial_transitions = data['Sleep_State'].diff()
+        wake_up_indices = initial_transitions[initial_transitions == -1].index
+        sleep_onset_indices = initial_transitions[initial_transitions == 1].index
+        for wake_idx in wake_up_indices:
+            next_sleep_onsets = sleep_onset_indices[sleep_onset_indices > wake_idx]
+            if not next_sleep_onsets.empty:
+                next_sleep_idx = next_sleep_onsets[0]
+                duration = data.loc[next_sleep_idx, 'DATE/TIME'] - data.loc[wake_idx, 'DATE/TIME']
+                if duration < pd.Timedelta(hours=2):
+                    data.loc[wake_idx:next_sleep_idx-1, 'Sleep_State'] = 1
 
     # --- Identify the final, cleaned transitions ---
     data['sleep_transition'] = data['Sleep_State'].diff()

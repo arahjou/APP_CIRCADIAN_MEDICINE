@@ -3,12 +3,21 @@ from copy import deepcopy
 from datetime import datetime, timedelta, time
 
 import pandas as pd
+import numpy as np
 import plotly.graph_objects as go
 import streamlit as st
+
+try:
+    from .sleep_algos import RawTS
+except ImportError:
+    # Allow running this file directly (non-package context).
+    from sleep_algos import RawTS
 
 DEFAULT_FILE = "data_set_1.csv"
 REQUIRED_COLUMNS = ["DATE/TIME", "PIMn"]
 HISTORY_LIMIT = 30
+ACTIVITY_COLUMN_CANDIDATES = ["PIMn", "ENMO", "activity", "ACTIVITY"]  # Priority order for activity column detection
+MAX_IMPUTABLE_GAP_MINUTES = 30  # Only impute gaps up to 30 minutes
 
 
 # -----------------------------
@@ -40,7 +49,12 @@ def prepare_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     out = out.dropna(subset=["DATE/TIME"]).sort_values("DATE/TIME").reset_index(drop=True)
 
     if "SLEEP_STATE" not in out.columns:
-        out["SLEEP_STATE"] = infer_sleep_state_from_pimn(out)
+        try:
+            out["SLEEP_STATE"] = infer_sleep_state_roenneberg(out)
+        except Exception as e:
+            # Fallback to all-wake if inference fails
+            print(f"Warning: Sleep state inference failed ({e}). Using all-wake fallback.")
+            out["SLEEP_STATE"] = pd.Series(0, index=range(len(out)), dtype=int)
     out["SLEEP_STATE"] = pd.to_numeric(out["SLEEP_STATE"], errors="coerce").fillna(0).astype(int)
     out["SLEEP_STATE"] = out["SLEEP_STATE"].clip(0, 1)
 
@@ -50,35 +64,245 @@ def prepare_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def detect_activity_column(data: pd.DataFrame) -> str:
+    """Detect which activity column to use, following priority list."""
+    for col in ACTIVITY_COLUMN_CANDIDATES:
+        if col in data.columns:
+            return col
+    raise ValueError(f"No activity column found. Expected one of: {ACTIVITY_COLUMN_CANDIDATES}")
+
+
+def normalize_activity_column(data: pd.DataFrame) -> pd.DataFrame:
+    """Normalize activity column to canonical 'activity' name."""
+    out = data.copy()
+    activity_col = detect_activity_column(out)
+    if activity_col != "activity":
+        out["activity"] = out[activity_col]
+    out["activity"] = pd.to_numeric(out["activity"], errors="coerce").fillna(0)
+    return out
+
+
+def detect_gaps(
+    data: pd.DataFrame,
+    activity_col: str = "activity",
+    max_gap_minutes: int = MAX_IMPUTABLE_GAP_MINUTES,
+) -> pd.Series:
+    """
+    Detect contiguous gaps (missing values) in activity column up to max_gap_minutes.
+    Returns a boolean Series marking which rows are in imputable gaps.
+    """
+    is_missing = data[activity_col].isna()
+    is_imputable = pd.Series(False, index=data.index)
+
+    # Find contiguous runs of missing values
+    data_sorted = data.sort_values("DATE/TIME").reset_index(drop=True)
+    is_missing_sorted = data_sorted[activity_col].isna().values
+
+    i = 0
+    epoch_minutes = infer_epoch_minutes(data_sorted)
+
+    while i < len(is_missing_sorted):
+        if is_missing_sorted[i]:
+            j = i
+            while j < len(is_missing_sorted) and is_missing_sorted[j]:
+                j += 1
+            gap_size_epochs = j - i
+            gap_size_minutes = gap_size_epochs * epoch_minutes
+
+            if gap_size_minutes <= max_gap_minutes:
+                for idx in range(i, j):
+                    is_imputable.iloc[idx] = True
+            i = j
+        else:
+            i += 1
+
+    return is_imputable
+
+
+def impute_by_time_of_day(
+    data: pd.DataFrame,
+    activity_col: str = "activity",
+    max_gap_minutes: int = MAX_IMPUTABLE_GAP_MINUTES,
+) -> tuple[pd.DataFrame, int]:
+    """
+    Primary imputation: fill missing values using mean of same HH:MM across other days.
+    Returns (imputed_data, count_imputed_by_time_of_day).
+    """
+    out = data.copy()
+    impute_mask = detect_gaps(out, activity_col=activity_col, max_gap_minutes=max_gap_minutes)
+    count_by_time = 0
+
+    for idx in out[impute_mask].index:
+        if pd.isna(out.loc[idx, activity_col]):
+            ts = out.loc[idx, "DATE/TIME"]
+            target_hm = (ts.hour, ts.minute)
+
+            # Find all valid values at the same HH:MM on other days
+            candidates = []
+            for other_idx, row in out.iterrows():
+                if other_idx != idx and not pd.isna(row[activity_col]):
+                    other_ts = row["DATE/TIME"]
+                    if (other_ts.hour, other_ts.minute) == target_hm:
+                        candidates.append(row[activity_col])
+
+            if candidates:
+                out.loc[idx, activity_col] = np.mean(candidates)
+                count_by_time += 1
+
+    return out, count_by_time
+
+
+def impute_by_local_fallback(
+    data: pd.DataFrame,
+    activity_col: str = "activity",
+    max_gap_minutes: int = MAX_IMPUTABLE_GAP_MINUTES,
+) -> tuple[pd.DataFrame, int]:
+    """
+    Secondary imputation: fill remaining missing values using two-sided local average.
+    Returns (imputed_data, count_imputed_by_fallback).
+    """
+    out = data.copy()
+    impute_mask = detect_gaps(out, activity_col=activity_col, max_gap_minutes=max_gap_minutes)
+    count_by_fallback = 0
+
+    for idx in out[impute_mask].index:
+        if pd.isna(out.loc[idx, activity_col]):
+            # Find nearest valid values before and after
+            before_val = None
+            after_val = None
+
+            for i in range(idx - 1, -1, -1):
+                if not pd.isna(out.iloc[i][activity_col]):
+                    before_val = out.iloc[i][activity_col]
+                    break
+
+            for i in range(idx + 1, len(out)):
+                if not pd.isna(out.iloc[i][activity_col]):
+                    after_val = out.iloc[i][activity_col]
+                    break
+
+            if before_val is not None and after_val is not None:
+                out.loc[idx, activity_col] = (before_val + after_val) / 2.0
+                count_by_fallback += 1
+            elif before_val is not None:
+                out.loc[idx, activity_col] = before_val
+                count_by_fallback += 1
+            elif after_val is not None:
+                out.loc[idx, activity_col] = after_val
+                count_by_fallback += 1
+
+    return out, count_by_fallback
+
+
+def infer_sleep_state_roenneberg(
+    data: pd.DataFrame,
+    activity_col: str = "activity",
+    threshold_frac: float = 0.15,
+    min_seed_min: int = 30,
+    analysis_epoch_min: int = 1,
+    max_imputable_gap_minutes: int = MAX_IMPUTABLE_GAP_MINUTES,
+) -> pd.Series:
+    """
+    Infer sleep state using Roenneberg (MASDA) algorithm from sleep_algos.
+    
+    Steps:
+    1. Normalize activity column to canonical 'activity' name from PIMn/ENMO/etc.
+    2. Impute missing values by time-of-day average, then two-sided fallback (gaps up to 30 min).
+    3. Regularize to 1-minute cadence with UTC timezone.
+    4. Run Roenneberg with configurable threshold/min_seed/epoch params.
+    5. Return SLEEP_STATE: 1=sleep, 0=wake.
+    """
+    try:
+        prep = data.copy()
+        
+        # Step 1: Normalize activity column
+        prep = normalize_activity_column(prep)
+        if "activity" not in prep.columns:
+            raise ValueError("Activity column normalization failed")
+        
+        # Step 2: Impute missing values
+        prep, count_by_time = impute_by_time_of_day(
+            prep,
+            activity_col="activity",
+            max_gap_minutes=max_imputable_gap_minutes,
+        )
+        prep, count_by_fallback = impute_by_local_fallback(
+            prep,
+            activity_col="activity",
+            max_gap_minutes=max_imputable_gap_minutes,
+        )
+        
+        # Step 3: Regularize timestamps to 1-minute cadence with UTC timezone
+        prep["DATE/TIME"] = pd.to_datetime(prep["DATE/TIME"], errors="coerce")
+        if prep["DATE/TIME"].dt.tz is None:
+            prep["DATE/TIME"] = prep["DATE/TIME"].dt.tz_localize("UTC")
+        else:
+            prep["DATE/TIME"] = prep["DATE/TIME"].dt.tz_convert("UTC")
+        
+        prep = prep.sort_values("DATE/TIME").reset_index(drop=True)
+        
+        # Create 1-minute regularized timeline
+        min_time = prep["DATE/TIME"].min()
+        max_time = prep["DATE/TIME"].max()
+        regular_index = pd.date_range(start=min_time, end=max_time, freq="1min", tz="UTC")
+        
+        prep_indexed = prep.set_index("DATE/TIME")["activity"]
+        prep_indexed = prep_indexed.reindex(regular_index).interpolate(method="linear", limit_direction="both")
+        prep_indexed = prep_indexed.fillna(0)
+        
+        # Step 4: Run Roenneberg
+        raw_ts = RawTS(activity=prep_indexed)
+        roenn_result = raw_ts.roenneberg(
+            threshold_frac=threshold_frac,
+            min_seed_min=min_seed_min,
+            analysis_epoch_min=analysis_epoch_min,
+        )
+        
+        # Step 5: Align output back to original index length
+        # Roenneberg output may be at different frequency; reindex to original DATE/TIME
+        original_datetimes = data["DATE/TIME"].reset_index(drop=True)
+        original_datetimes = pd.to_datetime(original_datetimes, errors="coerce")
+        if original_datetimes.dt.tz is None:
+            aligned_index = original_datetimes.dt.tz_localize("UTC")
+        else:
+            aligned_index = original_datetimes.dt.tz_convert("UTC")
+        
+        # Forward-fill roenneberg results to original timestamps
+        sleep_series = roenn_result.reindex(aligned_index, method="pad").fillna(0).astype(int)
+        sleep_series.index = range(len(sleep_series))
+        sleep_series.name = "SLEEP_STATE"
+        
+        return sleep_series
+    
+    except Exception as e:
+        # Fallback: If Roenneberg fails, return all zeros
+        import traceback
+        print(f"Roenneberg inference failed: {e}")
+        traceback.print_exc()
+        return pd.Series(0, index=range(len(data)), dtype=int, name="SLEEP_STATE")
+
+
 def infer_sleep_state_from_pimn(
     data: pd.DataFrame,
     rolling_window: int = 100,
     sleep_threshold: float = 6.0,
     max_wake_gap_hours: float = 2.0,
+    threshold_frac: float = 0.15,
+    min_seed_min: int = 30,
+    analysis_epoch_min: int = 1,
+    max_imputable_gap_minutes: int = MAX_IMPUTABLE_GAP_MINUTES,
 ) -> pd.Series:
-    """Infer initial sleep state from PIMn with light cleanup of short wake gaps."""
-    out = data.copy()
-    out["PIMn"] = pd.to_numeric(out["PIMn"], errors="coerce").fillna(0)
-    out["PIMn_avg"] = out["PIMn"].rolling(window=rolling_window, min_periods=1).mean()
-    out["Sleep_State"] = (out["PIMn_avg"] < sleep_threshold).astype(int)
-
-    # Fill short wake gaps inside sleep bouts to match analysis behavior.
-    transitions = out["Sleep_State"].diff()
-    wake_up_indices = transitions[transitions == -1].index
-    sleep_onset_indices = transitions[transitions == 1].index
-    for wake_idx in wake_up_indices:
-        next_sleep_onsets = sleep_onset_indices[sleep_onset_indices > wake_idx]
-        if next_sleep_onsets.empty:
-            continue
-        next_sleep_idx = int(next_sleep_onsets[0])
-        wake_time = out.loc[wake_idx, "DATE/TIME"]
-        next_sleep_time = out.loc[next_sleep_idx, "DATE/TIME"]
-        if pd.isna(wake_time) or pd.isna(next_sleep_time):
-            continue
-        if next_sleep_time - wake_time < pd.Timedelta(hours=max_wake_gap_hours):
-            out.loc[wake_idx:next_sleep_idx - 1, "Sleep_State"] = 1
-
-    return out["Sleep_State"]
+    """DEPRECATED: Use infer_sleep_state_roenneberg instead.
+    
+    Legacy method for backward compatibility.
+    """
+    return infer_sleep_state_roenneberg(
+        data,
+        threshold_frac=threshold_frac,
+        min_seed_min=min_seed_min,
+        analysis_epoch_min=analysis_epoch_min,
+        max_imputable_gap_minutes=max_imputable_gap_minutes,
+    )
 
 
 # -----------------------------
@@ -422,10 +646,14 @@ def run_sleep_editor(df: pd.DataFrame, source_key: str = "uploaded", show_export
 
     if seg_df.empty and int(st.session_state.df["SLEEP_STATE"].sum()) == 0:
         st.warning("No sleep bouts detected yet.")
-        if st.button("Auto-detect sleep bouts from PIMn", key="vis_autodetect_btn"):
+        if st.button("Auto-detect sleep bouts using Roenneberg", key="vis_autodetect_btn"):
             push_undo_state("autodetect_sleep_bouts")
-            st.session_state.df["SLEEP_STATE"] = infer_sleep_state_from_pimn(st.session_state.df)
-            st.session_state.df["EDITED"] = st.session_state.df["EDITED"] | st.session_state.df["SLEEP_STATE"].eq(1)
+            try:
+                st.session_state.df["SLEEP_STATE"] = infer_sleep_state_roenneberg(st.session_state.df)
+                st.session_state.df["EDITED"] = st.session_state.df["EDITED"] | st.session_state.df["SLEEP_STATE"].eq(1)
+                st.success("Sleep bouts auto-detected using Roenneberg algorithm.")
+            except Exception as e:
+                st.error(f"Sleep detection failed: {e}")
             st.rerun()
 
     # ----- sidebar: segment actions + export -----

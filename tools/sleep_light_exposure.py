@@ -24,9 +24,11 @@ def analyze_sleep_light_exposure(df_subset):
     # =========================================================================
     print("Step 2: Performing feature engineering...")
     if 'SLEEP_STATE' in df.columns:
+        used_fallback_sleep_state = False
         # Use the corrected sleep labels from the editor when provided.
         df['Sleep_State'] = pd.to_numeric(df['SLEEP_STATE'], errors='coerce').fillna(0).clip(0, 1).astype(int)
     else:
+        used_fallback_sleep_state = True
         # Fallback to activity-derived state estimation.
         df['PIMn_avg'] = df['PIMn'].rolling(window=100, min_periods=1).mean()
         df['Sleep_State'] = np.where(df['PIMn_avg'] < 6, 1, 0)
@@ -44,22 +46,26 @@ def analyze_sleep_light_exposure(df_subset):
     # =========================================================================
     # 2.5. DATA CLEANING: Fill Short Gaps in Sleep
     # =========================================================================
-    print("Step 2.5: Searching for and filling short gaps in sleep periods...")
+    if used_fallback_sleep_state:
+        print("Step 2.5: Searching for and filling short gaps in sleep periods...")
+    else:
+        print("Step 2.5: Using provided SLEEP_STATE labels without gap refilling...")
     df = df.sort_values("DATE/TIME").reset_index(drop=True)
-    initial_transitions = df['Sleep_State'].diff()
-    wake_up_indices = initial_transitions[initial_transitions == -1].index
-    sleep_onset_indices = initial_transitions[initial_transitions == 1].index
+    if used_fallback_sleep_state:
+        initial_transitions = df['Sleep_State'].diff()
+        wake_up_indices = initial_transitions[initial_transitions == -1].index
+        sleep_onset_indices = initial_transitions[initial_transitions == 1].index
 
-    for wake_idx in wake_up_indices:
-        next_sleep_onsets = sleep_onset_indices[sleep_onset_indices > wake_idx]
-        if not next_sleep_onsets.empty:
-            next_sleep_idx = next_sleep_onsets[0]
-            wake_time = df.loc[wake_idx, 'DATE/TIME']
-            next_sleep_time = df.loc[next_sleep_idx, 'DATE/TIME']
-            duration = next_sleep_time - wake_time
-            if duration < pd.Timedelta(hours=2):
-                print(f"  -> Found and filled a sleep gap of {duration} starting at {wake_time.strftime('%Y-%m-%d %H:%M')}")
-                df.loc[wake_idx:next_sleep_idx-1, 'Sleep_State'] = 1
+        for wake_idx in wake_up_indices:
+            next_sleep_onsets = sleep_onset_indices[sleep_onset_indices > wake_idx]
+            if not next_sleep_onsets.empty:
+                next_sleep_idx = next_sleep_onsets[0]
+                wake_time = df.loc[wake_idx, 'DATE/TIME']
+                next_sleep_time = df.loc[next_sleep_idx, 'DATE/TIME']
+                duration = next_sleep_time - wake_time
+                if duration < pd.Timedelta(hours=2):
+                    print(f"  -> Found and filled a sleep gap of {duration} starting at {wake_time.strftime('%Y-%m-%d %H:%M')}")
+                    df.loc[wake_idx:next_sleep_idx-1, 'Sleep_State'] = 1
 
     # =========================================================================
     # 3. TIME WINDOW BINARIZATION
