@@ -23,6 +23,20 @@ It was developed at the **Charité – Universitätsmedizin Berlin, Circadian Me
 
 ---
 
+## Technical Documentation
+
+Developer-oriented architecture and integration documentation is available in `docs/`:
+
+- `docs/README.md` — index of all technical documents
+- `docs/ARCHITECTURE.md` — system structure and end-to-end data flow
+- `docs/PYTHON_FILE_MAP.md` — purpose/inputs/outputs for all Python files
+- `docs/TOOLS_AND_SERVICES_API.md` — orchestration interface contracts
+- `docs/AGENT_PIPELINE.md` — multi-agent pipeline behavior and routing
+- `docs/EXTENSIBILITY_GUIDE.md` — exact integration path for new modalities (for example, skin temperature)
+- `docs/DATABASE_SCHEMA.md` — persistence model and artifact ownership
+
+---
+
 ## Features
 
 ### Actigraphy Metrics
