@@ -193,7 +193,8 @@ def _llm_keep_pmids(
 def _chat(model_name: str, system: str, user: str, temperature: float = 0.2) -> str:
     llm = ChatOllama(model=model_name, temperature=temperature)
     response = llm.invoke([SystemMessage(content=system), HumanMessage(content=user)])
-    return response.content.strip()
+    content = response.content
+    return content.strip() if isinstance(content, str) else str(content)
 
 
 # ---------------------------------------------------------------------------
@@ -833,7 +834,7 @@ def continue_conversation(
         + anamnesis_context
     )
 
-    messages = [SystemMessage(content=system_prompt)]
+    messages: list[SystemMessage | HumanMessage | AIMessage] = [SystemMessage(content=system_prompt)]
     for msg in conversation_history:
         if msg["role"] == "user":
             messages.append(HumanMessage(content=msg["content"]))
@@ -849,6 +850,7 @@ def continue_conversation(
     try:
         llm = ChatOllama(model=model, temperature=0.3)
         response = llm.invoke(messages)
-        return response.content.strip()
+        content = response.content
+        return content.strip() if isinstance(content, str) else str(content)
     except Exception as e:
         return f"Error during conversation: {e}\n\nPlease ensure Ollama is running and the model '{model}' is available."

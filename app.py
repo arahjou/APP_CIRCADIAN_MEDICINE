@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import streamlit as st
 import streamlit.components.v1 as components
 from datetime import datetime, timedelta
@@ -8,7 +10,7 @@ import pandas as pd
 import uuid
 import matplotlib.pyplot as plt
 import numpy as np
-from typing import Any
+from typing import Any, Callable, Optional, Protocol
 
 try:
     import plotly.express as px
@@ -45,16 +47,32 @@ from services.analysis_service import data_quality_report
 from services.report_service import build_comparison, persist_report_json
 from tools.sleep_editor import run_sleep_editor, infer_sleep_state_from_pimn, infer_sleep_state_roenneberg
 
+# Optional AI features
+save_analysis: Optional[Callable[[str, str], str]] = None
+continue_conversation: Optional[Callable[[str, str, list[dict[Any, Any]], str, str], str]] = None
 try:
-    from tools.llm_conversation import save_analysis, continue_conversation
+    from tools.llm_conversation import save_analysis as _save_analysis, continue_conversation as _continue_conversation
+    save_analysis = _save_analysis
+    continue_conversation = _continue_conversation
 except Exception:
-    save_analysis = None
-    continue_conversation = None
+    pass
 
+run_ai_pipeline: Optional[Callable[..., tuple[str, dict[str, Any]]]] = None
 try:
-    from services.ai_pipeline_service import run_ai_pipeline
+    from services.ai_pipeline_service import run_ai_pipeline as _run_ai_pipeline
+    run_ai_pipeline = _run_ai_pipeline
 except Exception:
-    run_ai_pipeline = None
+    pass
+
+
+# Protocol for database-like objects (enables duck typing for tests)
+class ActigraphDBLike(Protocol):
+    """Protocol for database objects with analysis result methods."""
+    def get_analysis_results_as_dataframe(self, record_id: str, table_name: str, analysis_type: str) -> pd.DataFrame | None:
+        ...
+    
+    def get_analysis_results(self, record_id: str, table_name: str) -> list[dict]:
+        ...
 
 
 AI_ANALYSIS_DIRNAME = "ai_analyses"
@@ -203,7 +221,7 @@ def _safe_mean(series: pd.Series) -> float:
     return float(numeric.mean())
 
 
-def _analysis_df(db: ActigraphDB, record_id: str, table_name: str, analysis_type: str) -> pd.DataFrame:
+def _analysis_df(db: ActigraphDBLike, record_id: str, table_name: str, analysis_type: str) -> pd.DataFrame:
     try:
         data = db.get_analysis_results_as_dataframe(record_id, table_name, analysis_type)
     except Exception:
@@ -250,7 +268,7 @@ def _build_series_dataframe(
     return out
 
 
-def _extract_sleep_light_payload(db: ActigraphDB, record_id: str) -> dict[str, Any]:
+def _extract_sleep_light_payload(db: ActigraphDBLike, record_id: str) -> dict[str, Any]:
     rows = db.get_analysis_results(record_id, "sleep_analysis")
     sle = next((row for row in rows if row.get("analysis_type") == "sleep_light_exposure"), None)
     if not sle:
@@ -289,7 +307,7 @@ def _build_light_exposure_series(record_id: str, payload: dict[str, Any], key: s
     return out
 
 
-def _record_dashboard_metrics(db: ActigraphDB, record_id: str) -> dict[str, float]:
+def _record_dashboard_metrics(db: ActigraphDBLike, record_id: str) -> dict[str, float]:
     sri_df = _analysis_df(db, record_id, "sleep_analysis", "sri_sleep")
     cpd_mid_df = _analysis_df(db, record_id, "sleep_analysis", "cpd_mid_sleep")
     activity_ra_df = _analysis_df(db, record_id, "activity_analysis", "activity_l5_m10_ra")
@@ -316,7 +334,7 @@ def _safe_delta(first: float, second: float) -> float:
     return float(second - first)
 
 
-def _build_raw_tables_for_record(db: ActigraphDB, record_id: str) -> dict[str, pd.DataFrame]:
+def _build_raw_tables_for_record(db: ActigraphDBLike, record_id: str) -> dict[str, pd.DataFrame]:
     tables = {
         "sleep_periods": _analysis_df(db, record_id, "sleep_analysis", "sleep_periods"),
         "cpd_mid_sleep": _analysis_df(db, record_id, "sleep_analysis", "cpd_mid_sleep"),
@@ -355,7 +373,7 @@ def _build_raw_tables_for_record(db: ActigraphDB, record_id: str) -> dict[str, p
     return tables
 
 
-def _build_comparison_dashboard_payload(db: ActigraphDB, id1: str, id2: str) -> dict[str, Any]:
+def _build_comparison_dashboard_payload(db: ActigraphDBLike, id1: str, id2: str) -> dict[str, Any]:
     metrics_1 = _record_dashboard_metrics(db, id1)
     metrics_2 = _record_dashboard_metrics(db, id2)
 

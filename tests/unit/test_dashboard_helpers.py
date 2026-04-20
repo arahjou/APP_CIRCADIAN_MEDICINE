@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Protocol
 import numpy as np
 import pandas as pd
 
@@ -12,6 +13,15 @@ from app import (
 )
 
 
+class ActigraphDBProtocol(Protocol):
+    """Protocol for database-like objects used in dashboard helpers."""
+    def get_analysis_results_as_dataframe(self, record_id: str, table_name: str, analysis_type: str) -> pd.DataFrame | None:
+        ...
+    
+    def get_analysis_results(self, record_id: str, table_name: str) -> list[dict]:
+        ...
+
+
 class DummyDB:
     def __init__(
         self,
@@ -21,12 +31,12 @@ class DummyDB:
         self.df_map = df_map or {}
         self.row_map = row_map or {}
 
-    def get_analysis_results_as_dataframe(self, record_id: str, table_name: str, analysis_type: str):
+    def get_analysis_results_as_dataframe(self, record_id: str, table_name: str, analysis_type: str) -> pd.DataFrame | None:
         key = (record_id, table_name, analysis_type)
         df = self.df_map.get(key)
         return None if df is None else df.copy()
 
-    def get_analysis_results(self, record_id: str, table_name: str):
+    def get_analysis_results(self, record_id: str, table_name: str) -> list[dict]:
         return list(self.row_map.get((record_id, table_name), []))
 
 

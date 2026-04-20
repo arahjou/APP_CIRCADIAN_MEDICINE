@@ -698,7 +698,7 @@ class RawTS:
     
     def _estimate_zeta(self, data: pd.Series, seq_length_max: int, n_bootstrap: int = 100, level: float = 0.05) -> int:
         """Estimate zeta parameter from ratio of zero sequences."""
-        ratios = []
+        ratios_list: list[float] = []
         for seq_len in range(1, seq_length_max + 1):
             rolling_sum = data.rolling(seq_len).sum()
             np.random.seed(0)
@@ -708,10 +708,10 @@ class RawTS:
                 replace=True
             )
             ratio = 1 - np.count_nonzero(sample) / len(sample) if len(sample) > 0 else 0
-            ratios.append(ratio)
+            ratios_list.append(ratio)
         
-        ratios = np.array(ratios)
-        zeta_est = np.argmax(ratios < level)
+        ratios: np.ndarray = np.array(ratios_list)
+        zeta_est: int = int(np.argmax(ratios < level))
         return max(1, zeta_est)
 
     # ---------- 5) MASDA / MASDA ----------
