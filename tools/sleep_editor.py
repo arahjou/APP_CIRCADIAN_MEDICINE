@@ -1,6 +1,5 @@
 import io
-from copy import deepcopy
-from datetime import datetime, timedelta, time
+from datetime import datetime
 
 import pandas as pd
 import numpy as np
@@ -91,7 +90,6 @@ def detect_gaps(
     Detect contiguous gaps (missing values) in activity column up to max_gap_minutes.
     Returns a boolean Series marking which rows are in imputable gaps.
     """
-    is_missing = data[activity_col].isna()
     is_imputable = pd.Series(False, index=data.index)
 
     # Find contiguous runs of missing values

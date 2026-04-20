@@ -199,6 +199,18 @@ export LOCKOUT_MINUTES=15
 export SHOW_RAW_PIPELINE_TRACES=0
 ```
 
+### Credentials and API Keys
+
+- Real secrets must be stored in a local `.env` file (gitignored) or shell environment variables, not in tracked files.
+- `NCBI_API_KEY` is optional but recommended for higher PubMed throughput.
+  - Request it from your NCBI account settings: `https://account.ncbi.nlm.nih.gov/settings/`
+- `DB_BACKUP_KEY` is required for encrypted backups.
+  - Generate a strong key locally, for example:
+    ```bash
+    openssl rand -hex 32
+    ```
+- If any credential was previously exposed, rotate/revoke it at the provider before reuse.
+
 Backup and integrity check (encrypted):
 
 ```bash

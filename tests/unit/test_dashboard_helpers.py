@@ -93,15 +93,15 @@ def test_build_comparison_dashboard_payload_full() -> None:
     assert payload["ids"] == ("R1", "R2")
     kpi_df = payload["kpi_df"]
     assert len(kpi_df) == 8
-    assert (kpi_df["missing"] == False).any()
+    assert (~kpi_df["missing"].fillna(True)).any()
 
     sri_trend = payload["sri_trend"]
-    assert not sri_trend[sri_trend["missing"] == False].empty
+    assert not sri_trend[~sri_trend["missing"].fillna(True)].empty
     assert set(sri_trend["record_id"].dropna().unique()) == {"R1", "R2"}
 
     light_df = payload["light_exposure_df"]
     assert set(light_df["exposure_type"].dropna().unique()) == {"During sleep (>1 lux)", "Post wake (<250 lux)"}
-    assert not light_df[light_df["missing"] == False].empty
+    assert not light_df[~light_df["missing"].fillna(True)].empty
 
 
 def test_build_comparison_dashboard_payload_handles_missing_record_data() -> None:

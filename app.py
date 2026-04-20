@@ -1,7 +1,6 @@
 import streamlit as st
 import streamlit.components.v1 as components
 from datetime import datetime, timedelta
-import sqlite3
 import os
 import json
 import html
@@ -1388,7 +1387,11 @@ def main():
                         )
                     else:
                         sri_df = payload.get("sri_trend", pd.DataFrame())
-                        sri_plot = sri_df[sri_df["missing"] == False].copy() if not sri_df.empty else pd.DataFrame()
+                        sri_plot = (
+                            sri_df[~sri_df["missing"].fillna(True)].copy()
+                            if not sri_df.empty
+                            else pd.DataFrame()
+                        )
                         st.markdown("#### SRI trend")
                         if sri_plot.empty:
                             st.info("No SRI trend data available for this pair.")
@@ -1406,7 +1409,11 @@ def main():
                             st.plotly_chart(fig_sri, use_container_width=True)
 
                         cpd_df = payload.get("cpd_trend", pd.DataFrame())
-                        cpd_plot = cpd_df[cpd_df["missing"] == False].copy() if not cpd_df.empty else pd.DataFrame()
+                        cpd_plot = (
+                            cpd_df[~cpd_df["missing"].fillna(True)].copy()
+                            if not cpd_df.empty
+                            else pd.DataFrame()
+                        )
                         st.markdown("#### CPD Mid-Sleep trend")
                         if cpd_plot.empty:
                             st.info("No CPD trend data available for this pair.")
@@ -1424,7 +1431,11 @@ def main():
                             st.plotly_chart(fig_cpd, use_container_width=True)
 
                         profile_df = payload.get("profile_df", pd.DataFrame())
-                        profile_plot = profile_df[profile_df["missing"] == False].copy() if not profile_df.empty else pd.DataFrame()
+                        profile_plot = (
+                            profile_df[~profile_df["missing"].fillna(True)].copy()
+                            if not profile_df.empty
+                            else pd.DataFrame()
+                        )
                         st.markdown("#### Profile metrics by domain")
                         if profile_plot.empty:
                             st.info("No profile metrics available for this pair.")
@@ -1442,7 +1453,11 @@ def main():
                             st.plotly_chart(fig_profile, use_container_width=True)
 
                         light_exp_df = payload.get("light_exposure_df", pd.DataFrame())
-                        light_exp_plot = light_exp_df[light_exp_df["missing"] == False].copy() if not light_exp_df.empty else pd.DataFrame()
+                        light_exp_plot = (
+                            light_exp_df[~light_exp_df["missing"].fillna(True)].copy()
+                            if not light_exp_df.empty
+                            else pd.DataFrame()
+                        )
                         st.markdown("#### Light exposure summary")
                         if light_exp_plot.empty:
                             st.info("No light-exposure list payloads found for metric1/metric3.")

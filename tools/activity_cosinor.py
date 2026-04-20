@@ -1,7 +1,6 @@
 import numpy as np
 import pandas as pd
 from scipy.optimize import curve_fit
-from datetime import datetime
 
 # This function remains the same
 def cosinor_function(t, mesor, amplitude, acrophase):

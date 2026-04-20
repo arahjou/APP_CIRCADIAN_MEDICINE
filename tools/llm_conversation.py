@@ -28,7 +28,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from typing import TypedDict, Callable, Any
+from typing import TypedDict, Callable
 
 from langchain_ollama import ChatOllama
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage

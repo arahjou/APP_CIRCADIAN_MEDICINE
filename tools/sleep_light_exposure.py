@@ -110,12 +110,12 @@ def analyze_sleep_light_exposure(df_subset):
 
     # Metric 2
     minutes_bright_before_sleep_by_date = df[(df['3_hours_before_sleep'] == 1) & (df['lighting_condition'] > 1)].groupby('DATE').size()
-    print(f"\nMinutes of bright light (MELANOPIC EDI > 10 lux) in the 3 hours before sleep by date:")
+    print("\nMinutes of bright light (MELANOPIC EDI > 10 lux) in the 3 hours before sleep by date:")
     print(minutes_bright_before_sleep_by_date if not minutes_bright_before_sleep_by_date.empty else "No bright light exposure detected in the 3 hours before sleep.")
 
     # Metric 3
     minutes_not_bright_after_wake_by_date = df[(df['3_hours_after_wakeup'] == 1) & (df['lighting_condition'] < 3)].groupby('DATE').size()
-    print(f"\nMinutes of non-bright light (MELANOPIC EDI < 250 lux) in the 3 hours after waking up by date:")
+    print("\nMinutes of non-bright light (MELANOPIC EDI < 250 lux) in the 3 hours after waking up by date:")
     print(minutes_not_bright_after_wake_by_date if not minutes_not_bright_after_wake_by_date.empty else "No non-bright light exposure detected in the 3 hours after waking up.")
     
     print("="*50 + "\nScript finished.")

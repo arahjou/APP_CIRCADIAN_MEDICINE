@@ -730,7 +730,7 @@ class ActigraphDB:
                 for result in results:
                     try:
                         result['results'] = json.loads(result['results'])
-                    except:
+                    except (TypeError, json.JSONDecodeError):
                         pass  # Keep as string if JSON parsing fails
                 
                 return results

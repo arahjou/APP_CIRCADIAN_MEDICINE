@@ -9,11 +9,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from tools.database import ActigraphDB
-from tools.settings import get_settings
-
-
 def main() -> int:
+    from tools.database import ActigraphDB
+    from tools.settings import get_settings
+
     parser = argparse.ArgumentParser(description="Create or rotate an admin user")
     parser.add_argument("--username", required=True)
     parser.add_argument("--password", required=True)
