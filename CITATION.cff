@@ -11,6 +11,7 @@ abstract: >
 authors:
   - family-names: "Rahjouei"
     given-names: "Ali"
+    name-suffix: "Dr. rer. nat."
     orcid: "https://orcid.org/0000-0003-3973-6333"
     affiliation: "Charité – Universitätsmedizin Berlin, Circadian Medicine Lab"
 repository-code: "https://github.com/arahjou/APP_CIRCADIAN_MEDICINE"
