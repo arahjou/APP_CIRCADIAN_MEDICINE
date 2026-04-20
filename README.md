@@ -13,7 +13,7 @@ A privacy-preserving, AI-augmented web application for clinical circadian rhythm
 3. Comparing recordings across multiple time periods (e.g., before/after intervention)
 4. Generating structured clinical reports via a 5- or 6-agent AI pipeline that runs **entirely locally** — no patient data ever leaves the machine
 
-It was developed at the **Charité – Universitätsmedizin Berlin, Circadian Medicine Lab**.
+It was developed as a personal project.
 
 ---
 
@@ -111,8 +111,8 @@ Structured clinical report (expert / doctor / layperson)
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/<your-org>/circadian-medicine-suite.git
-cd circadian-medicine-suite
+git clone https://github.com/arahjou/APP_CIRCADIAN_MEDICINE.git
+cd APP_CIRCADIAN_MEDICINE
 
 # 2. Create and activate a virtual environment
 python -m venv .venv
@@ -139,6 +139,25 @@ Open your browser at `http://localhost:8501`.
 
 ---
 
+## Testing
+
+Run the local test suite:
+
+```bash
+pytest -q tests
+```
+
+Run static checks used in CI:
+
+```bash
+ruff check app.py tools services scripts tests
+mypy tools/settings.py tools/pubmed_search.py services tests/unit tests/integration
+```
+
+The GitHub Actions workflow in `.github/workflows/ci.yml` runs these checks automatically on push and pull request.
+
+---
+
 ## Input Data Format
 
 The application expects one or more CSV files with the following columns:
@@ -152,8 +171,6 @@ The application expects one or more CSV files with the following columns:
 | `SLEEP/WAKE` | ✓ | Binary sleep state (0 = wake, 1 = sleep) |
 
 Sample data files are provided in the `data/` directory.
-
-> ⚠️ **Data privacy:** Never commit real patient data to a public repository. The `.gitignore` excludes CSV files from version control by default.
 
 ---
 
@@ -247,17 +264,23 @@ ai_analyses/            # Saved AI report snapshots
 If you use this software in your research, please cite:
 
 ```
-Ali Rahjouei (2026). Circadian Medicine Analysis Suite (Version 1.0) [Computer software].
-Charité – Universitätsmedizin Berlin. https://doi.org/10.5281/zenodo.XXXXXXX
+Ali Rahjouei (2026). Circadian Medicine Analysis Suite (Version 0.1.0) [Computer software].
+Charité – Universitätsmedizin Berlin. https://doi.org/10.5281/zenodo.XXXXXXX (placeholder DOI; replace after tagging and Zenodo archiving)
 ```
 
-Or use the `CITATION.cff` file in this repository.
+Or use `CITATION.cff` in this repository. The DOI field is currently a placeholder until the first public archived release is minted.
 
 ---
 
 ## Contributing
 
-Contributions are welcome. Please open an issue to discuss proposed changes before submitting a pull request.
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, workflow, and pull request expectations.
+
+For questions and bug reports, see [SUPPORT.md](SUPPORT.md).
+
+Project history is tracked in [CHANGELOG.md](CHANGELOG.md).
+
+GitHub issue and pull request templates are provided under `.github/` to standardize reports and reviews.
 
 ---
 

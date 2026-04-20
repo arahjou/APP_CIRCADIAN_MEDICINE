@@ -38,6 +38,8 @@ Circadian Medicine Analysis Suite fills this gap by combining:
 
 The tool is aimed at clinician-researchers and postdoctoral scientists who require rigorous, reproducible circadian profiling without sacrificing data security or incurring substantial engineering overhead.
 
+In the current development phase, the software is used for internal research workflows in the Circadian Medicine Lab at Charité to standardize metric extraction and longitudinal comparison from actigraphy exports. By unifying analysis, comparison, and literature-linked reporting in one local workflow, the project reduces manual handoffs and improves reproducibility through persisted JSON artifacts and version-controlled methods.
+
 # Implementation
 
 ## Input Data
@@ -93,10 +95,14 @@ Multi-user access is controlled via PBKDF2-HMAC-SHA256 password hashing with a p
 
 # Availability
 
-The software is available at [https://github.com/<your-org>/circadian-medicine-suite](https://github.com/<your-org>/circadian-medicine-suite) under the MIT License. It requires Python \>= 3.10, a local Ollama installation, and a standard research workstation. A complete installation guide and sample anonymised data are provided in the repository.
+The software is available at [https://github.com/arahjou/APP_CIRCADIAN_MEDICINE](https://github.com/arahjou/APP_CIRCADIAN_MEDICINE) under the MIT License. It requires Python \>= 3.10, a local Ollama installation, and a standard research workstation. A complete installation guide and sample anonymized data are provided in the repository.
 
 # Acknowledgements
 
 Developed at the Circadian Medicine Lab, Charité – Universitätsmedizin Berlin. The author thanks Luísa Klaus Pilz for scientific guidance. LLM inference uses Ollama [@OllamaSoftware]; literature retrieval uses the NCBI Entrez E-utilities API [@NCBIEutilities].
+
+## AI Usage Disclosure
+
+Generative AI models are part of the software runtime pipeline described in this paper (local Ollama-backed agents for summarization and literature synthesis). These model outputs are treated as software-generated artifacts and are not used as standalone evidence for scientific claims without human verification.
 
 # References

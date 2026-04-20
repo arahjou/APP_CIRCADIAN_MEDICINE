@@ -13,11 +13,11 @@ authors:
     given-names: "Ali"
     orcid: "https://orcid.org/0000-0003-3973-6333"
     affiliation: "Charité – Universitätsmedizin Berlin, Circadian Medicine Lab"
-repository-code: "https://github.com/<your-org>/circadian-medicine-suite"
-url: "https://github.com/<your-org>/circadian-medicine-suite"
+repository-code: "https://github.com/arahjou/APP_CIRCADIAN_MEDICINE"
+url: "https://github.com/arahjou/APP_CIRCADIAN_MEDICINE"
 license: MIT
-version: "1.0.0"
-date-released: "2026-03-22"
+version: "0.1.0"
+date-released: "2026-04-20"
 keywords:
   - circadian medicine
   - actigraphy
@@ -35,4 +35,4 @@ keywords:
 identifiers:
   - type: doi
     value: "10.5281/zenodo.XXXXXXX"
-    description: "Zenodo archive DOI (update after archiving)"
+    description: "Zenodo archive DOI placeholder (replace after GitHub release is archived by Zenodo)"
