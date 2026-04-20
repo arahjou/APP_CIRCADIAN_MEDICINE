@@ -34,5 +34,5 @@ keywords:
   - wearable sensors
 identifiers:
   - type: doi
-    value: "10.5281/zenodo.XXXXXXX"
-    description: "Zenodo archive DOI placeholder (replace after GitHub release is archived by Zenodo)"
+    value: "10.5281/zenodo.19669862"
+    description: "Zenodo archive DOI for release v0.1.0"

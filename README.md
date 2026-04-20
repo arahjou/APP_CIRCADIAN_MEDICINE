@@ -277,10 +277,10 @@ If you use this software in your research, please cite:
 
 ```
 Ali Rahjouei (2026). Circadian Medicine Analysis Suite (Version 0.1.0) [Computer software].
-Charité – Universitätsmedizin Berlin. https://doi.org/10.5281/zenodo.XXXXXXX (placeholder DOI; replace after tagging and Zenodo archiving)
+Charité – Universitätsmedizin Berlin. https://doi.org/10.5281/zenodo.19669862
 ```
 
-Or use `CITATION.cff` in this repository. The DOI field is currently a placeholder until the first public archived release is minted.
+Or use `CITATION.cff` in this repository.
 
 ---
 
