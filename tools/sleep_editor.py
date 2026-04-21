@@ -10,7 +10,7 @@ try:
     from .sleep_algos import RawTS
 except ImportError:
     # Allow running this file directly (non-package context).
-    from sleep_algos import RawTS
+    from sleep_algos import RawTS  # type: ignore[import-not-found, no-redef]
 
 DEFAULT_FILE = "data_set_1.csv"
 REQUIRED_COLUMNS = ["DATE/TIME", "PIMn"]
@@ -585,6 +585,7 @@ def run_sleep_editor(df: pd.DataFrame, source_key: str = "uploaded", show_export
         index=1,
         key="vis_display_mode",
     )
+    assert display_mode is not None
     plot_signal = st.sidebar.selectbox(
         "Signal to plot",
         options=[col for col in st.session_state.df.columns if col not in ["SLEEP_STATE", "EDITED"]],
@@ -662,6 +663,7 @@ def run_sleep_editor(df: pd.DataFrame, source_key: str = "uploaded", show_export
         with st.expander("Adjust boundaries", expanded=True):
             if segment_options:
                 selected_seg = st.selectbox("Segment", segment_options, key="vis_adjust_segment")
+                assert selected_seg is not None
                 seg_row = seg_df[seg_df["segment_id"] == selected_seg].iloc[0]
                 default_start = seg_row["start"].to_pydatetime()
                 default_end = seg_row["end"].to_pydatetime()

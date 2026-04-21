@@ -558,7 +558,7 @@ def _save_ai_analysis_snapshot(
 
     txt_abspath = os.path.join(os.getcwd(), txt_relpath)
     if save_analysis is not None:
-        txt_abspath = save_analysis(analysis_text, filename=txt_relpath)
+        txt_abspath = save_analysis(analysis_text, txt_relpath)
     else:
         with open(txt_abspath, "w") as f:
             f.write(analysis_text)

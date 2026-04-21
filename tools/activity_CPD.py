@@ -90,7 +90,7 @@ def calculate_cpd_activity(
         dev_prev_vec = np.full(len(out) - 1, np.nan)
         mask_pair = ~np.isnan(curr) & ~np.isnan(prev)
         dev_prev_vec[mask_pair] = _circ_diff(curr[mask_pair], prev[mask_pair])
-        deviation_from_prev = np.concatenate(([np.nan], dev_prev_vec))
+        deviation_from_prev = np.concatenate((np.array([np.nan]), dev_prev_vec))
 
         deviation_from_mean_hours = deviation_from_mean / two_pi_over_24
         deviation_from_prev_hours = deviation_from_prev / two_pi_over_24
