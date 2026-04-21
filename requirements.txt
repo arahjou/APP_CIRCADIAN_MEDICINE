@@ -20,6 +20,3 @@ cryptography>=42.0.0
 pytest>=8.2.0
 ruff>=0.6.0
 mypy>=1.11.0
-pandas-stubs>=2.0.0
-types-plotly>=5.0.0
-scipy-stubs>=1.11.0

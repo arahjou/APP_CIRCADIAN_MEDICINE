@@ -48,8 +48,8 @@ from services.report_service import build_comparison, persist_report_json
 from tools.sleep_editor import run_sleep_editor, infer_sleep_state_from_pimn, infer_sleep_state_roenneberg
 
 # Optional AI features
-save_analysis: Optional[Callable[[str, str], str]] = None
-continue_conversation: Optional[Callable[[str, str, list[dict[Any, Any]], str, str], str]] = None
+save_analysis: Optional[Callable[[str, str], str]] = None  # type: ignore[assignment]
+continue_conversation: Optional[Callable[[str, str, list[dict[Any, Any]], str, str], str]] = None  # type: ignore[assignment]
 try:
     from tools.llm_conversation import save_analysis as _save_analysis, continue_conversation as _continue_conversation
     save_analysis = _save_analysis
@@ -57,7 +57,7 @@ try:
 except Exception:
     pass
 
-run_ai_pipeline: Optional[Callable[..., tuple[str, dict[str, Any]]]] = None
+run_ai_pipeline: Optional[Callable[..., tuple[str, dict[str, Any]]]] = None  # type: ignore[assignment]
 try:
     from services.ai_pipeline_service import run_ai_pipeline as _run_ai_pipeline
     run_ai_pipeline = _run_ai_pipeline

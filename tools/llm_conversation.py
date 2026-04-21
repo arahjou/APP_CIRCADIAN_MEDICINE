@@ -194,7 +194,9 @@ def _chat(model_name: str, system: str, user: str, temperature: float = 0.2) -> 
     llm = ChatOllama(model=model_name, temperature=temperature)
     response = llm.invoke([SystemMessage(content=system), HumanMessage(content=user)])
     content = response.content
-    return content.strip() if isinstance(content, str) else str(content)
+    if isinstance(content, str):
+        return content.strip()
+    return str(content)
 
 
 # ---------------------------------------------------------------------------
@@ -834,7 +836,8 @@ def continue_conversation(
         + anamnesis_context
     )
 
-    messages: list[SystemMessage | HumanMessage | AIMessage] = [SystemMessage(content=system_prompt)]
+    messages: list[SystemMessage | HumanMessage | AIMessage] = []
+    messages.append(SystemMessage(content=system_prompt))
     for msg in conversation_history:
         if msg["role"] == "user":
             messages.append(HumanMessage(content=msg["content"]))
@@ -851,6 +854,8 @@ def continue_conversation(
         llm = ChatOllama(model=model, temperature=0.3)
         response = llm.invoke(messages)
         content = response.content
-        return content.strip() if isinstance(content, str) else str(content)
+        if isinstance(content, str):
+            return content.strip()
+        return str(content)
     except Exception as e:
         return f"Error during conversation: {e}\n\nPlease ensure Ollama is running and the model '{model}' is available."

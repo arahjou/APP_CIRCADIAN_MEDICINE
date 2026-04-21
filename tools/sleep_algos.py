@@ -710,8 +710,8 @@ class RawTS:
             ratio = 1 - np.count_nonzero(sample) / len(sample) if len(sample) > 0 else 0
             ratios_list.append(ratio)
         
-        ratios: np.ndarray = np.array(ratios_list)
-        zeta_est: int = int(np.argmax(ratios < level))
+        ratios = np.array(ratios_list)
+        zeta_est = int(np.argmax(ratios < level))
         return max(1, zeta_est)
 
     # ---------- 5) MASDA / MASDA ----------
