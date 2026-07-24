@@ -50,14 +50,37 @@ def _title_key(title: str) -> str:
     return re.sub(r"\W+", " ", (title or "").lower()).strip()
 
 
-def _build_pubmed_query(structured_query: Dict[str, str], cfg: RetrievalConfig) -> str:
+_POPULATION_COVERED_BY_MESH = {
+    "human", "humans", "people", "person", "subject", "subjects", "participant", "participants",
+    "patient", "patients",
+}
+_POPULATION_COVERED_BY_ADULT_MESH = _POPULATION_COVERED_BY_MESH | {"adult", "adults"}
+
+
+def _build_pubmed_query(
+    structured_query: Dict[str, str],
+    cfg: RetrievalConfig,
+    *,
+    drop_population: bool = False,
+    drop_context: bool = False,
+) -> str:
     topic = (structured_query.get("topic") or "circadian rhythm").strip()
     population = (structured_query.get("population") or "humans").strip()
     context = (structured_query.get("context") or "sleep").strip()
 
     topic_block = f"({topic}[Title/Abstract] OR {topic}[MeSH Terms])"
-    context_block = f"({context}[Title/Abstract] OR chronobiology[Title/Abstract])"
-    pop_block = f"({population}[Title/Abstract])"
+
+    blocks = [topic_block]
+    if not drop_context:
+        blocks.append(f"({context}[Title/Abstract] OR chronobiology[Title/Abstract])")
+
+    pop_lower = population.lower().strip()
+    covered = (
+        (cfg.adults_only and pop_lower in _POPULATION_COVERED_BY_ADULT_MESH)
+        or (cfg.humans_only and pop_lower in _POPULATION_COVERED_BY_MESH)
+    )
+    if not drop_population and not covered:
+        blocks.append(f"({population}[Title/Abstract])")
 
     filters = [f'("{max(2000, 2026 - cfg.years_back)}"[Date - Publication] : "3000"[Date - Publication])']
     if cfg.humans_only:
@@ -65,7 +88,7 @@ def _build_pubmed_query(structured_query: Dict[str, str], cfg: RetrievalConfig) 
     if cfg.adults_only:
         filters.append("adult[MeSH Terms]")
 
-    return f"{topic_block} AND {context_block} AND {pop_block} AND " + " AND ".join(filters)
+    return " AND ".join(blocks) + " AND " + " AND ".join(filters)
 
 
 def _esearch(query: str, api_key: str | None, retmax: int) -> list[str]:
@@ -221,9 +244,21 @@ def search_pubmed(
     seen_pmids: set[str] = set()
 
     for qobj in structured_queries:
-        compiled = _build_pubmed_query(qobj, cfg)
-        time.sleep(_RETRY_WAIT)
-        pmids = _esearch(compiled, ncbi_api_key, cfg.retmax_per_query)
+        # Cascade: full → drop population → drop context → drop both. Stop at first non-empty.
+        relaxation_steps = [
+            {"drop_population": False, "drop_context": False},
+            {"drop_population": True,  "drop_context": False},
+            {"drop_population": False, "drop_context": True},
+            {"drop_population": True,  "drop_context": True},
+        ]
+        compiled = ""
+        pmids: list[str] = []
+        for step in relaxation_steps:
+            compiled = _build_pubmed_query(qobj, cfg, **step)
+            time.sleep(_RETRY_WAIT)
+            pmids = _esearch(compiled, ncbi_api_key, cfg.retmax_per_query)
+            if pmids:
+                break
         if not pmids:
             continue
 

@@ -1,0 +1,1 @@
+python scripts/bootstrap_admin.py --username admin --password "YourStrongPassword"

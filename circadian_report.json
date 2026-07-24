@@ -2,10 +2,10 @@
     "metadata": {
         "report_type": "circadian_comparison",
         "period_ids": [
-            "D01_01",
-            "D01_02"
+            "ID-001",
+            "ID-002"
         ],
-        "generated_at": "2026-04-02T11:44:33.720282",
+        "generated_at": "2026-05-11T22:23:49.823066",
         "header": "Report",
         "summary": "This report provides a comprehensive analysis of the circadian rhythms and activity patterns of the subjects over the study period."
     },
@@ -14,41 +14,41 @@
             "Circadian Rhythms and Sleep Metrics": [
                 {
                     "Name": "CPD mid sleep",
-                    "Period1": 0.54,
-                    "Period2": 0.13,
-                    "Difference": -0.41000000000000003
+                    "Period1": 0.33,
+                    "Period2": 0.26,
+                    "Difference": -0.07
                 },
                 {
                     "Name": "SRI",
-                    "Period1": 89.89,
-                    "Period2": 90.05,
-                    "Difference": 0.1599999999999966
+                    "Period1": 84.06,
+                    "Period2": 91.88,
+                    "Difference": 7.819999999999993
                 },
                 {
                     "Name": "Sleep Duration",
-                    "Period1": 237.0,
-                    "Period2": 279.0,
-                    "Difference": 42.0
+                    "Period1": 269.0,
+                    "Period2": 335.0,
+                    "Difference": 66.0
                 }
             ],
             "Light Exposure Recommendations": [
                 {
                     "Name": "\u2191 recom. during sleep",
-                    "Period1": 25.5,
-                    "Period2": 0.0,
-                    "Difference": -25.5
+                    "Period1": 18.33,
+                    "Period2": 7.0,
+                    "Difference": -11.329999999999998
                 },
                 {
                     "Name": "\u2191 recom. before sleep",
                     "Period1": 0.0,
-                    "Period2": 0.0,
-                    "Difference": 0.0
+                    "Period2": 14.5,
+                    "Difference": 14.5
                 },
                 {
                     "Name": "\u2193 recom. after waking",
                     "Period1": 180.0,
-                    "Period2": 177.6,
-                    "Difference": -2.4000000000000057
+                    "Period2": 180.0,
+                    "Difference": 0.0
                 }
             ]
         },

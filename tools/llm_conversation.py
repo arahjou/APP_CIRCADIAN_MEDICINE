@@ -153,12 +153,19 @@ Input:
 1) structured PubMed evidence items (PMID + title + abstract + lexical score)
 2) the clinical summary and query intents
 
-Output:
-- Return ONLY a JSON array of PMIDs that should be kept.
-- Keep evidence directly relevant to circadian rhythm, sleep regularity, actigraphy, light exposure, or chronobiology.
+Output a single JSON object with this exact shape:
+  {"keep_pmids": ["12345678", "23456789", ...]}
+
+Rules:
+- keep_pmids must contain ONLY PMIDs from the input evidence items, as strings.
+- Keep evidence directly relevant to circadian rhythm, sleep regularity, actigraphy,
+  light exposure, chronobiology, or sleep-wake patterns.
 - Prefer higher-quality clinical relevance over broad background biology.
-- If none are relevant, return [].
-No explanation."""
+- Drop papers that are off-topic for the queries (e.g. ultra-endurance athletes,
+  professional tennis players, tangential physiology) UNLESS the clinical summary
+  specifically calls them out.
+- If none are relevant, return {"keep_pmids": []}.
+- Output JSON only, no prose, no markdown."""
 
 
 def _llm_keep_pmids(
@@ -167,6 +174,7 @@ def _llm_keep_pmids(
     queries: list[dict],
     summary: str,
     fast_model: str,
+    fallback_model: str | None = None,
 ) -> set[str]:
     if not evidence_items:
         return set()
@@ -175,23 +183,46 @@ def _llm_keep_pmids(
         f"Query intents:\n{json.dumps(queries, ensure_ascii=False)}\n\n"
         f"Evidence items:\n{json.dumps(evidence_items, ensure_ascii=False)}"
     )
-    try:
-        raw = _chat(
-            model_name=fast_model,
-            system=_RELEVANCE_SYSTEM,
-            user=user_content,
-            temperature=0.0,
-        )
-        parsed = json.loads(raw)
-        if isinstance(parsed, list):
-            return {str(x) for x in parsed}
-    except Exception:
-        pass
+
+    models_to_try = [fast_model]
+    if fallback_model and fallback_model != fast_model:
+        models_to_try.append(fallback_model)
+
+    for model_name in models_to_try:
+        try:
+            raw = _chat(
+                model_name=model_name,
+                system=_RELEVANCE_SYSTEM,
+                user=user_content,
+                temperature=0.0,
+                format="json",
+            )
+            parsed = json.loads(raw)
+            # Accept either {"keep_pmids": [...]} or a bare list.
+            if isinstance(parsed, dict):
+                items = parsed.get("keep_pmids") or parsed.get("pmids") or []
+            elif isinstance(parsed, list):
+                items = parsed
+            else:
+                items = []
+            if isinstance(items, list) and items:
+                return {str(x) for x in items}
+        except Exception:
+            continue
     return set()
 
 
-def _chat(model_name: str, system: str, user: str, temperature: float = 0.2) -> str:
-    llm = ChatOllama(model=model_name, temperature=temperature)
+def _chat(
+    model_name: str,
+    system: str,
+    user: str,
+    temperature: float = 0.2,
+    format: str | None = None,
+) -> str:
+    kwargs: dict = {"model": model_name, "temperature": temperature}
+    if format:
+        kwargs["format"] = format
+    llm = ChatOllama(**kwargs)
     response = llm.invoke([SystemMessage(content=system), HumanMessage(content=user)])
     content = response.content
     if isinstance(content, str):
@@ -436,6 +467,7 @@ def agent3_literature_search(state: PipelineState) -> PipelineState:
             queries=state["search_queries"],
             summary=state.get("data_summary", ""),
             fast_model="llama3.2",
+            fallback_model=state["model"],
         )
         if keep_pmids:
             evidence_items = [x for x in evidence_items if str(x.get("pmid")) in keep_pmids]
@@ -460,6 +492,33 @@ def agent4_literature_synthesiser(state: PipelineState) -> PipelineState:
     return {**state, "lit_summary": lit_summary}
 
 
+_BARE_PMID_RE = re.compile(r"\(\s*PMID(?:\s*[:#-])?\s*\)")
+_PMID_WITH_NUM_RE = re.compile(r"PMID\s*[:#-]?\s*(\d+)")
+
+
+def _sanitize_pmids(report_text: str, allowed_pmids: set[str]) -> str:
+    """Remove fabricated and bare PMID citations from report text.
+
+    - Strips bare ``(PMID)`` / ``(PMID:)`` placeholders entirely.
+    - Replaces ``(PMID 12345)`` whose ID is not in ``allowed_pmids`` with
+      ``(no direct evidence found)``.
+    """
+    text = _BARE_PMID_RE.sub("(no direct evidence found)", report_text)
+
+    def _replace_citation(match: re.Match) -> str:
+        body = match.group(0)
+        cited = _PMID_WITH_NUM_RE.findall(body)
+        kept = [pid for pid in cited if pid in allowed_pmids]
+        if not cited:
+            return "(no direct evidence found)"
+        if not kept:
+            return "(no direct evidence found)"
+        return "(" + "; ".join(f"PMID {pid}" for pid in kept) + ")"
+
+    text = re.sub(r"\([^()]*PMID[^()]*\)", _replace_citation, text)
+    return text
+
+
 def agent5_report_writer(state: PipelineState) -> PipelineState:
     audience = state.get("audience", "layperson")
     audience_label = {
@@ -470,11 +529,14 @@ def agent5_report_writer(state: PipelineState) -> PipelineState:
     _notify(state, f"✍️ Agent 5/5: Writing final report for {audience_label}...")
     system_prompt = _AGENT5_AUDIENCES.get(audience, _AGENT5_AUDIENCES["layperson"])
 
+    evidence_items = state.get("evidence_items") or []
+    has_evidence = bool(evidence_items)
+
     user_content = (
         f"# Actigraphy Data Context\n{state['compact_report']}\n\n"
         f"# Clinical Data Summary\n{state['data_summary']}\n\n"
         f"# Supporting Literature Evidence\n{state['lit_summary']}\n\n"
-        f"# Evidence Items (use PMIDs from here only)\n{json.dumps(state.get('evidence_items') or [], ensure_ascii=False)}\n\n"
+        f"# Evidence Items (use PMIDs from here only)\n{json.dumps(evidence_items, ensure_ascii=False)}\n\n"
     )
     symptom_table = state.get("symptom_metric_table", "").strip()
     if symptom_table:
@@ -483,10 +545,25 @@ def agent5_report_writer(state: PipelineState) -> PipelineState:
             "When writing the report, include a section titled \'Symptom-Metric Correlation\' "
             "that incorporates the table above and highlights any unexplained symptoms.\n\n"
         )
-    user_content += (
-        "Write the final report now.\n"
-        "Every evidence-backed claim must include PMID in parentheses, and PMIDs must come from evidence items above."
-    )
+    if has_evidence:
+        user_content += (
+            "Write the final report now.\n"
+            "Citation rules — STRICT:\n"
+            "- Every evidence-backed claim must cite a real PMID in parentheses, e.g. (PMID 12345678).\n"
+            "- ONLY use PMIDs that appear in the Evidence Items list above. Never invent or guess a PMID.\n"
+            "- NEVER write a bare placeholder like '(PMID)' with no number. If you have no PMID for a claim, "
+            "write '(no direct evidence found)' instead, or omit the claim."
+        )
+    else:
+        user_content += (
+            "Write the final report now.\n"
+            "IMPORTANT — no PubMed evidence was retrieved for this case:\n"
+            "- Do NOT cite any PMIDs anywhere in the report.\n"
+            "- Do NOT write '(PMID)', '(PMID: ...)', or any placeholder suggesting a citation.\n"
+            "- For any claim that would normally need literature support, either omit it or label it as "
+            "'(no direct evidence found)'.\n"
+            "- You may still report data-driven findings from the Clinical Data Summary."
+        )
 
     final_report = _chat(
         model_name=state["model"],
@@ -494,14 +571,20 @@ def agent5_report_writer(state: PipelineState) -> PipelineState:
         user=user_content,
         temperature=0.2,
     )
-    # append a references section with PubMed links for cited PMIDs
+
+    # Post-process: scrub bare/fabricated PMID placeholders the model may still emit.
     pmids = state.get("pmid_list") or []
+    allowed = {str(p) for p in pmids}
+    final_report = _sanitize_pmids(final_report, allowed)
+
     claim_to_pmid_map: dict[str, list[str]] = {}
     for line in final_report.splitlines():
-        if "(PMID" in line:
-            cited = re.findall(r"PMID\\s*(\\d+)", line)
+        if "PMID" in line:
+            cited = _PMID_WITH_NUM_RE.findall(line)
+            cited = [c for c in cited if c in allowed]
             if cited:
                 claim_to_pmid_map[line.strip()[:180]] = cited
+
     if pmids:
         ref_lines = ["\n\n---\nReferences (PubMed):"]
         for i, pmid in enumerate(pmids, start=1):

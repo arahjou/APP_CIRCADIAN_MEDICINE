@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from dataclasses import dataclass
 from typing import List
 
@@ -29,7 +30,26 @@ def _parse_bool(value: str, default: bool = False) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _load_dotenv_if_present() -> None:
+    """Load .env once, without overriding already-exported environment variables."""
+    env_path = Path(__file__).resolve().parents[1] / ".env"
+    if not env_path.exists():
+        return
+
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key:
+            os.environ.setdefault(key, value)
+
+
 def get_settings() -> Settings:
+    _load_dotenv_if_present()
+
     app_env = os.getenv("APP_ENV", "dev").strip().lower()
     if app_env not in {"dev", "staging", "prod"}:
         raise ValueError("APP_ENV must be one of: dev, staging, prod")

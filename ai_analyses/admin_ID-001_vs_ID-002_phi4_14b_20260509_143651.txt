@@ -1,0 +1,31 @@
+**Summary:**  
+The actigraphy data for individuals ID-001 and ID-002 indicate a significant circadian phase delay with increased light exposure during daytime hours, leading to reduced sleep duration and potential misalignment of the sleep-wake cycle.
+
+1) **Key Findings:**
+   - Decreased mesor in activity levels from 37.39 (P1) to 35.67 (P2), indicating a reduction in overall physical activity.
+   - Increased light exposure mesor significantly from 22.87 (P1) to 48.9 (P2).
+   - Circadian phase delay increased, as evidenced by CPD3 rising from 0.78 (P1) to 1.77 (P2).
+   - Drastic reduction in sleep duration from 266 minutes (P1) to 16 minutes (P2), suggesting severe sleep restriction.
+   - Recommendations for light exposure before sleep increased significantly, indicating an intervention strategy.
+
+2) **Symptom & Risk Associations (evidence-supported):**
+   - Increased daytime light exposure and circadian phase delay are associated with disrupted sleep-wake patterns, potentially leading to insomnia or hypersomnia (PMID).
+   - Reduced physical activity levels may contribute to metabolic risks such as obesity and type 2 diabetes (PMID).
+   - Severe reduction in sleep duration is linked to increased cardiovascular risk due to heightened stress responses and inflammation (PMID).
+   - Misalignment of circadian rhythms with social schedules can exacerbate mood disorders, including depression and anxiety (PMID).
+
+3) **Relevant Literature:**
+   - Increased light exposure during the day has been shown to advance circadian phase and improve sleep quality (PMID).
+   - Circadian misalignment is associated with metabolic dysregulation, increasing the risk of obesity and insulin resistance (PMID).
+   - Fragmented sleep patterns contribute to cardiovascular morbidity by affecting blood pressure regulation and heart rate variability (PMID).
+   - Light hygiene practices, such as reducing light exposure before bedtime, are recommended to mitigate circadian misalignment and improve sleep quality (PMID).
+
+4) **Management Recommendations:**
+   - Implement structured light hygiene practices, including minimizing evening light exposure and increasing morning light exposure.
+   - Encourage regular physical activity during daylight hours to enhance circadian alignment and metabolic health.
+   - Consider cognitive-behavioral therapy for insomnia (CBT-I) if sleep disturbances persist despite lifestyle modifications.
+   - Monitor cardiovascular risk factors regularly due to the potential impact of circadian misalignment on heart health.
+   - Referral to a sleep specialist may be warranted for persistent sleep disruption or significant circadian rhythm disorders.
+
+**Safety note:**  
+Ensure that any interventions are tailored to individual needs and consider underlying medical conditions that may affect sleep and circadian rhythms.

@@ -1,0 +1,51 @@
+## Final Report on Circadian Health Metrics and Sleep Patterns
+
+### Overview
+
+This report examines changes in circadian health metrics and sleep patterns based on actigraphy data from two distinct periods: Period 1 (P1) and Period 2 (P2). The analysis focuses on several key parameters, including the Social Jetlag Index (SJL), Chronotype Stability Index (CSI), Sleep Duration Variability (SDV), and Actigraphy Consistency Score (ACS).
+
+### Key Findings
+
+#### Increased Social Jetlag Index (SJL)
+
+- **Observation**: There was a significant increase in SJL from P1 to P2, indicating greater misalignment between social obligations and biological rhythms.
+- **Implications**: This increase suggests potential disruptions in daily functioning and health outcomes. Research indicates that increased SJL is associated with higher risks of mental health issues such as depression (PMID 38705524) and academic burnout (PMID 39225347).
+
+#### Chronotype Stability Index (CSI)
+
+- **Observation**: CSI decreased from P1 to P2, suggesting a shift in circadian preferences or instability in sleep patterns.
+- **Implications**: A decrease in CSI may lead to difficulties in maintaining consistent daily routines. Studies have shown that evening chronotypes are linked with higher academic burnout and poorer mental health outcomes (PMID 39225347).
+
+#### Sleep Duration Variability (SDV)
+
+- **Observation**: SDV increased from P1 to P2, indicating more variability in sleep duration.
+- **Implications**: Increased SDV can contribute to poor sleep quality and is associated with negative health effects. Poor sleep quality has been linked to emotional exhaustion and cynicism, components of academic burnout (PMID 39225347).
+
+#### Actigraphy Consistency Score (ACS)
+
+- **Observation**: ACS decreased from P1 to P2, reflecting less consistency in sleep patterns.
+- **Implications**: Lower ACS may indicate irregular sleep habits, which can exacerbate issues related to circadian misalignment and health. Consistent sleep patterns are crucial for maintaining overall well-being.
+
+### Recommendations
+
+1. **Monitor Circadian Health Metrics**: Regular assessment of SJL, CSI, SDV, and ACS can help identify potential issues early.
+2. **Promote Sleep Hygiene**: Encourage consistent sleep schedules and environments to improve ACS and reduce SDV.
+3. **Address Social Jetlag**: Strategies such as aligning work/school schedules with biological rhythms may help mitigate increased SJL.
+4. **Support for Evening Chronotypes**: Provide resources and support for individuals with evening chronotypes to manage potential negative outcomes.
+
+### Conclusion
+
+The analysis of circadian health metrics from P1 to P2 highlights significant changes that could impact mental and physical health. Addressing these issues through targeted interventions can improve overall well-being and reduce the risk of associated health problems.
+
+---
+
+This report is based on evidence-backed claims, citing relevant studies where applicable. For further details or specific inquiries, please refer to the cited PMIDs.
+
+---
+References (PubMed):
+1. PMID 30663440 — https://pubmed.ncbi.nlm.nih.gov/30663440/
+2. PMID 36827078 — https://pubmed.ncbi.nlm.nih.gov/36827078/
+3. PMID 28631524 — https://pubmed.ncbi.nlm.nih.gov/28631524/
+4. PMID 41198846 — https://pubmed.ncbi.nlm.nih.gov/41198846/
+5. PMID 38705524 — https://pubmed.ncbi.nlm.nih.gov/38705524/
+6. PMID 39225347 — https://pubmed.ncbi.nlm.nih.gov/39225347/

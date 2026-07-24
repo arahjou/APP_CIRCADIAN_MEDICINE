@@ -1,0 +1,27 @@
+Fallback report (deterministic):
+
+Data summary:
+Period IDs: ['ID-001', 'ID-002']
+Activity Patterns | Cosinor Analysis (Mesor and Acrophase) | Mesor: P1=37.39, P2=35.67, Δ=-1.7199999999999989
+Activity Patterns | Cosinor Analysis (Mesor and Acrophase) | CPD2: P1=1.29, P2=1.29, Δ=0.0
+Activity Patterns | Interdaily Stability (IS) and Intradaily Variability (IV) | IS: P1=0.21, P2=0.22, Δ=0.010000000000000009
+Activity Patterns | Interdaily Stability (IS) and Intradaily Variability (IV) | IV: P1=0.52, P2=0.52, Δ=0.0
+Activity Patterns | Most Active 10h (M10), Least Active 5h (L5), and Relative Amplitude (RA) | M10: P1=53.57, P2=50.27, Δ=-3.299999999999997
+Activity Patterns | Most Active 10h (M10), Least Active 5h (L5), and Relative Amplitude (RA) | L5: P1=8.79, P2=7.05, Δ=-1.7399999999999993
+Activity Patterns | Most Active 10h (M10), Least Active 5h (L5), and Relative Amplitude (RA) | RA: P1=0.78, P2=0.78, Δ=0.0
+Light Exposure Patterns | Light Exposure Cosinor Analysis | Mesor: P1=22.87, P2=48.9, Δ=26.029999999999998
+Light Exposure Patterns | Light Exposure Cosinor Analysis | CPD3: P1=0.78, P2=1.77, Δ=0.99
+Light Exposure Patterns | Light Exposure IS and IV | IS: P1=0.15, P2=0.15, Δ=0.0
+Light Exposure Patterns | Light Exposure IS and IV | IV: P1=0.67, P2=0.63, Δ=-0.040000000000000036
+Light Exposure Patterns | Light Exposure L5, M10, and RA | M10: P1=43.73, P2=95.23, Δ=51.50000000000001
+Light Exposure Patterns | Light Exposure L5, M10, and RA | L5: P1=0.67, P2=0.48, Δ=-0.19000000000000006
+Light Exposure Patterns | Light Exposure L5, M10, and RA | RA: P1=0.98, P2=0.94, Δ=-0.040000000000000036
+Sleep and Circadian Health | Circadian Rhythms and Sleep Metrics | CPD mid sleep: P1=0.31, P2=4.93, Δ=4.62
+Sleep and Circadian Health | Circadian Rhythms and Sleep Metrics | SRI: P1=84.34, P2=90.83, Δ=6.489999999999995
+Sleep and Circadian Health | Circadian Rhythms and Sleep Metrics | Sleep Duration: P1=266.0, P2=16.0, Δ=-250.0
+Sleep and Circadian Health | Light Exposure Recommendations | ↑ recom. during sleep: P1=18.0, P2=11.0, Δ=-7.0
+Sleep and Circadian Health | Light Exposure Recommendations | ↑ recom. before sleep: P1=0.0, P2=16.0, Δ=16.0
+Sleep and Circadian Health | Light Exposure Recommendations | ↓ recom. after waking: P1=180.0, P2=205.4, Δ=25.400000000000006
+
+Evidence summary:
+No reliable LLM synthesis available for this run.
