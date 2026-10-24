@@ -46,7 +46,7 @@ Developer-oriented architecture and integration documentation is available in `d
 
 | Domain | Metric | Description |
 |--------|--------|-------------|
-| **Activity** | IS / IV | Interdaily Stability & Intradaily Variability (rolling 2-day) |
+| **Activity** | IS / IV | Interdaily Stability & Intradaily Variability (rolling 2-day, hourly means) |
 | **Activity** | L5 / M10 / RA | Least-active 5 h, Most-active 10 h, Relative Amplitude |
 | **Activity** | Cosinor | Daily mesor, amplitude, acrophase fitted by nonlinear least-squares |
 | **Activity** | CPD | Change Point Detection on activity pattern |
@@ -59,7 +59,14 @@ Developer-oriented architecture and integration documentation is available in `d
 | **Light** | Cosinor | Daily mesor, amplitude, acrophase of melanopic EDI |
 | **Light** | CPD | Change Point Detection on light exposure pattern |
 
-### AI Analysis Pipeline (fully local)
+### AI Analysis Pipeline (local by default)
+
+The pipeline runs on a local Ollama model by default. Claude, OpenAI or Gemini
+can be selected instead by setting `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or
+`GOOGLE_API_KEY` (and installing `langchain-anthropic`, `langchain-openai` or
+`langchain-google-genai`); models are listed in `CLOUD_MODELS` as
+`provider/model`. Cloud providers receive the metric summary and any anamnesis,
+so the app asks for confirmation before sending.
 
 A 5-agent [LangGraph](https://github.com/langchain-ai/langgraph) pipeline processes the computed metrics:
 

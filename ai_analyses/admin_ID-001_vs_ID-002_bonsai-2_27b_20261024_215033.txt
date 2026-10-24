@@ -1,0 +1,62 @@
+# Sleep Regularity and Its Associations with Health, Cognition, and Brain Structure: A Synthesis of Recent Evidence
+
+## 1. Introduction
+
+Sleep regularity—the degree to which an individual's sleep and wake timing remains consistent across days—has emerged as a distinct and potentially independent determinant of health outcomes beyond traditional sleep metrics such as duration and timing. The Sleep Regularity Index (SRI) has become a widely used metric for quantifying day-to-day variability in sleep and wake onset times (33360364, 35551259, 31949189). This report synthesizes recent evidence examining how sleep regularity relates to psychiatric, metabolic, and neuroimaging outcomes across the lifespan.
+
+## 2. Sleep Regularity in Older Adults with Depression
+
+A study of 138 older adults (mean age 63.8 ± 8.6 years) stratified into current major depression (n = 27), remitted major depression (n = 64), and healthy controls (n = 47) used wrist-worn actigraphy to assess sleep-wake patterns (33360364). Key findings included:
+
+- Older adults with **current** depression exhibited significantly lower SRI (p < 0.01), lower relative amplitude (p < 0.05), and higher activity during sleeping and post-midnight hours compared with healthy controls (33360364).
+- Older adults with **remitted** depression showed lower daytime activity and reduced average activity and amplitude relative to controls, despite no significant differences in total sleep time, sleep timing, or number of awakenings (33360364).
+- All groups differed significantly in self-reported sleep quality and depression severity, suggesting that subjective sleep disturbance persists even when objective metrics appear comparable (33360364).
+
+These findings indicate that sleep regularity and rest-activity patterns are preserved markers of depressive status, even in remission, and may serve as targets for interventions aimed at reducing risk of poor outcomes in older adults (33360364).
+
+## 3. Sleep Regularity and Pediatric Adiposity
+
+A pediatric study (ages 4–13 years; N = 144) from the U.S. Newborn Epigenetic Study (NEST) examined the associations of sleep duration, sleep onset timing, and SRI with three adiposity measures (BMI Z-score, waist circumference, and waist-to-height ratio) using one week of ActiGraph actigraphy (35551259). Principal findings:
+
+- **Sleep duration** was consistently and significantly associated with lower adiposity across all three measures (BMI Z-score β = −0.29, p < 0.001; waist circumference β = −0.31, p < 0.001; WHtR β = −0.38, p < 0.001) (35551259).
+- **Sleep onset timing** was not significantly associated with any adiposity measure after controlling for demographic covariates (35551259).
+- **SRI** showed associations in the expected direction (lower SRI → higher adiposity) but were non-significant, with the SRI–WHtR association marginally non-significant (β = −0.16, p = 0.077) (35551259).
+
+The authors concluded that pediatric sleep interventions should prioritize elongating nighttime sleep duration as the primary lever for improving adiposity outcomes, with regularity as a secondary consideration (35551259).
+
+## 4. Sleep Regularity and Default Mode Network Connectivity
+
+A study of 25 healthy adolescents and young adults (age range 12–22 years; mean 18.08 ± 2.64; 56% female) combined seven days of actigraphy with resting-state fMRI to examine the relationship between SRI and brain network structure using graph theory (31949189). Findings:
+
+- Greater sleep regularity (higher SRI) was associated with **decreased path length** (i.e., increased network connectivity) in Default Mode Network (DMN) regions, particularly the right and left lateral parietal lobule (31949189).
+- The association extended to the **Language Network**, including the left inferior frontal gyrus and left posterior superior frontal gyrus (31949189).
+- Results were robust to covariates including sex and age (31949189).
+
+These findings suggest that sleep regularity is tightly linked to DMN structural connectivity during adolescence and young adulthood, and that reduced DMN connectivity may reflect local rather than global network changes (31949189).
+
+## 5. Synthesis and Discussion
+
+Across the three studies, several convergent themes emerge:
+
+- **Sleep regularity is a measurable and reproducible construct** that can be captured with actigraphy and
+
+---
+References (PubMed):
+1. PMID 30311830 — https://pubmed.ncbi.nlm.nih.gov/30311830/
+2. PMID 37355647 — https://pubmed.ncbi.nlm.nih.gov/37355647/
+3. PMID 34488088 — https://pubmed.ncbi.nlm.nih.gov/34488088/
+4. PMID 40273170 — https://pubmed.ncbi.nlm.nih.gov/40273170/
+5. PMID 36852604 — https://pubmed.ncbi.nlm.nih.gov/36852604/
+6. PMID 41670991 — https://pubmed.ncbi.nlm.nih.gov/41670991/
+7. PMID 28845960 — https://pubmed.ncbi.nlm.nih.gov/28845960/
+8. PMID 35287149 — https://pubmed.ncbi.nlm.nih.gov/35287149/
+9. PMID 32611430 — https://pubmed.ncbi.nlm.nih.gov/32611430/
+10. PMID 41075809 — https://pubmed.ncbi.nlm.nih.gov/41075809/
+11. PMID 36465660 — https://pubmed.ncbi.nlm.nih.gov/36465660/
+12. PMID 34120225 — https://pubmed.ncbi.nlm.nih.gov/34120225/
+13. PMID 36415902 — https://pubmed.ncbi.nlm.nih.gov/36415902/
+14. PMID 32893681 — https://pubmed.ncbi.nlm.nih.gov/32893681/
+15. PMID 31751607 — https://pubmed.ncbi.nlm.nih.gov/31751607/
+16. PMID 33360364 — https://pubmed.ncbi.nlm.nih.gov/33360364/
+17. PMID 35551259 — https://pubmed.ncbi.nlm.nih.gov/35551259/
+18. PMID 31949189 — https://pubmed.ncbi.nlm.nih.gov/31949189/

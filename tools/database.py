@@ -5,6 +5,7 @@ Handles SQLite operations for storing and retrieving analysis records
 
 import sqlite3
 import json
+import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
@@ -942,6 +943,12 @@ class ActigraphDB:
                             if all_vals.empty:
                                 continue
                             agg_vals = getattr(all_vals, agg)() if hasattr(all_vals, agg) else all_vals.mean()
+                            # Clock-time phases wrap at 24 h; average them on the circle.
+                            for col, period in (("acrophase_hours", 24.0), ("acrophase_radians", 2 * np.pi)):
+                                if agg == "mean" and col in all_vals:
+                                    angles = all_vals[col].dropna().to_numpy(dtype=float) * 2 * np.pi / period
+                                    agg_vals[col] = (np.arctan2(np.sin(angles).sum(), np.cos(angles).sum())
+                                                     % (2 * np.pi)) * period / (2 * np.pi) if angles.size else np.nan
                             # add columns with prefix
                             for col, val in agg_vals.items():
                                 key = f"{table}.{a_type}.{col}_{agg}"

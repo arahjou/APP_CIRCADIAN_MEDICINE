@@ -27,6 +27,7 @@ from services.report_service import build_comparison, persist_report_json
 from tools.app_logging import log_event
 from tools.database import ActigraphDB
 
+from tools.llm_providers import installed_ollama_models, is_configured, is_local, parse_model_spec, provider_of
 from tools.settings import get_settings
 
 
@@ -589,6 +590,11 @@ def _load_previous_ai_analyses_for_user(username: str) -> list[dict]:
     entries.sort(key=_sort_key, reverse=True)
     return entries
 
+@st.cache_data(ttl=60, show_spinner=False)
+def _installed_ollama_models() -> list[str] | None:
+    return installed_ollama_models()
+
+
 def check_login(db: ActigraphDB, username: str, password: str) -> bool:
     return db.verify_user_password(username=username, password=password)
 
@@ -766,32 +772,9 @@ def main():
                 dash_tab, visual_tab, report_tab = st.tabs(["📌 Dashboard", "📈 Visual Compare", "🧾 Report + Raw Tables"])
 
                 with dash_tab:
-                    kpi_df = payload.get("kpi_df", pd.DataFrame())
-                    if kpi_df.empty:
-                        st.info("No KPI metrics available for this pair yet.")
-                    else:
-                        st.markdown("#### KPI overview (record-level aggregates)")
-                        for _, row in kpi_df.iterrows():
-                            metric_label = str(row.get("metric_label", "Metric"))
-                            unit = str(row.get("unit", ""))
-                            c0, c1, c2, c3 = st.columns([1.8, 1, 1, 1])
-                            with c0:
-                                st.markdown(f"**{metric_label}**")
-                            with c1:
-                                st.metric(str(cached_ids[0]), _format_metric(row.get("value_1"), unit=unit))
-                            with c2:
-                                st.metric(str(cached_ids[1]), _format_metric(row.get("value_2"), unit=unit))
-                            with c3:
-                                st.metric("Delta (2-1)", _format_metric(row.get("delta_2_minus_1"), unit=unit))
+                    from tools.dashboard_view import build_dashboard_data, render_comparison_dashboard
 
-                        show_df = kpi_df.copy()
-                        show_df["value_1"] = show_df["value_1"].map(lambda v: _format_metric(v))
-                        show_df["value_2"] = show_df["value_2"].map(lambda v: _format_metric(v))
-                        show_df["delta_2_minus_1"] = show_df["delta_2_minus_1"].map(lambda v: _format_metric(v))
-                        st.dataframe(
-                            show_df[["metric_label", "value_1", "value_2", "delta_2_minus_1", "missing"]],
-                            use_container_width=True,
-                        )
+                    render_comparison_dashboard(build_dashboard_data(db, cached_ids[0], cached_ids[1]))
 
                 with visual_tab:
                     if not PLOTLY_AVAILABLE:
@@ -1072,12 +1055,47 @@ def main():
         with col2:
             ai_id2 = st.selectbox("Select second period ID", options=record_ids, key="ai_id2")
         
-        # Model selection
-        model_option = st.selectbox(
-            "Select LLM Model",
-            options=settings.allowed_models,
-            help="Choose the Ollama model for analysis"
-        )
+        # Model selection: local Ollama models plus cloud models whose API key is set.
+        installed_local = _installed_ollama_models()
+        provider_labels = {"Local (Ollama)": list(dict.fromkeys(settings.allowed_models + (installed_local or [])))}
+        for spec in settings.cloud_models:
+            if is_configured(spec):
+                provider_labels.setdefault(provider_of(spec).label, []).append(spec)
+        prov_col, model_col = st.columns([1, 2])
+        with prov_col:
+            provider_label = st.selectbox(
+                "LLM provider",
+                options=list(provider_labels),
+                help="Cloud providers appear when ANTHROPIC_API_KEY, OPENAI_API_KEY or GOOGLE_API_KEY is set.",
+            )
+        with model_col:
+            local_provider = provider_label == "Local (Ollama)"
+            model_option = st.selectbox(
+                "Model",
+                options=provider_labels[provider_label],
+                format_func=lambda spec: parse_model_spec(spec)[1],
+                # Any installed Ollama model can be typed in, e.g. "bonsai-2:27b".
+                accept_new_options=local_provider,
+                help="Pick a listed model or type the name of any model you have pulled with `ollama pull`."
+                if local_provider else None,
+                key=f"llm_model_{provider_label}",
+            )
+            model_option = (model_option or "").strip()
+        if not model_option:
+            st.warning("Enter a model name to continue.")
+            st.stop()
+        if is_local(model_option) and installed_local is not None and model_option not in installed_local \
+                and f"{model_option}:latest" not in installed_local:
+            st.warning(f"`{model_option}` is not installed in Ollama. Run `ollama pull {model_option}` first.")
+        cloud_consent = True
+        if not is_local(model_option):
+            st.warning(
+                f"**Data leaves this machine.** {provider_of(model_option).label} will receive the computed "
+                "metric summary and, if entered, the anamnesis text. Do not include names or other identifiers."
+            )
+            cloud_consent = st.checkbox(
+                f"I confirm this data may be sent to {provider_of(model_option).label}.", key="cloud_llm_consent"
+            )
 
         # Audience selector
         audience_map = {
@@ -1205,7 +1223,7 @@ def main():
             st.info(f"💾 Saved AI analysis found for this selection (last update: {last_updated}).")
             st.warning("ℹ️ Generating now will overwrite this saved result for the same IDs + model + audience.")
         
-        if st.button("🧠 Generate AI Analysis", type="primary"):
+        if st.button("🧠 Generate AI Analysis", type="primary", disabled=not cloud_consent):
             if ai_id1 and ai_id2:
                 if ai_id1 == ai_id2:
                     st.error("Please select two different periods to compare.")
@@ -1346,11 +1364,15 @@ def main():
                                     st.rerun()  # Refresh to show chat interface
                                 else:
                                     st.error(f"❌ {analysis}")
-                                    st.info("💡 Make sure Ollama is running and the selected model is installed. Run `ollama pull " + model_option + "` in your terminal.")
+                                    if is_local(model_option):
+                                        st.info("💡 Make sure Ollama is running and the selected model is installed. Run `ollama pull " + model_option + "` in your terminal.")
+                                    else:
+                                        st.info(f"💡 Check the {provider_of(model_option).api_key_env} key and that `{provider_of(model_option).package}` is installed.")
                     
                     except Exception as e:
                         st.error(f"❌ An error occurred: {e!s}")
-                        st.info("💡 Make sure Ollama is installed and running. Visit https://ollama.ai for installation instructions.")
+                        if is_local(model_option):
+                            st.info("💡 Make sure Ollama is installed and running. Visit https://ollama.ai for installation instructions.")
             else:
                 st.warning("Please select two periods to compare.")
         
@@ -1460,11 +1482,20 @@ def main():
                         if continue_conversation is None:
                             st.error("Follow-up chat is unavailable because AI chat dependencies are not installed.")
                             st.stop()
+                        chat_model_spec = st.session_state.current_model or "phi4:14b"
+                        if not is_local(chat_model_spec) and not (
+                            model_option == chat_model_spec and st.session_state.get("cloud_llm_consent")
+                        ):
+                            st.warning(
+                                f"This conversation uses {provider_of(chat_model_spec).label}. Select that model above "
+                                "and tick the data-sharing confirmation to continue."
+                            )
+                            st.stop()
                         response = continue_conversation(
                             user_question=user_question,
                             json_filepath=st.session_state.json_filepath,
                             conversation_history=conversation_history,
-                            model=st.session_state.current_model or "phi4:14b",
+                            model=chat_model_spec,
                             anamnesis=st.session_state.get("current_anamnesis", ""),
                         )
                         

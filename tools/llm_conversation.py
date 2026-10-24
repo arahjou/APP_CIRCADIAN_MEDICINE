@@ -4,7 +4,7 @@
 Pipeline:
   JSON Report
       ↓
-  [Agent 1: Data Summariser]        ← local Ollama
+  [Agent 1: Data Summariser]        ← selected LLM (local Ollama or cloud)
       → clinical metric summary (~400 words)
       ↓
   [Agent 2: Keyword Extractor]      ← local Ollama (fast model)
@@ -19,8 +19,9 @@ Pipeline:
   [Agent 5: Report Writer]          ← local Ollama, audience-aware
       → final structured report
 
-Privacy guarantee: only keyword queries reach the internet — raw metrics and
-patient identifiers never leave the local machine.
+Privacy: with a local Ollama model only keyword queries reach the internet.
+With a cloud model (Claude / OpenAI / Gemini, see tools/llm_providers.py) the
+metric summary and any anamnesis are sent to that provider.
 """
 
 from __future__ import annotations
@@ -30,12 +31,12 @@ import os
 import re
 from typing import TypedDict, Callable
 
-from langchain_ollama import ChatOllama
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langgraph.graph import StateGraph, END
 
 from tools.pubmed_search import search_pubmed, evidence_to_text, RetrievalConfig
 from tools.app_logging import log_event
+from tools.llm_providers import chat_model, extract_json, fast_model_for, response_text
 
 
 # ---------------------------------------------------------------------------
@@ -219,15 +220,10 @@ def _chat(
     temperature: float = 0.2,
     format: str | None = None,
 ) -> str:
-    kwargs: dict = {"model": model_name, "temperature": temperature}
-    if format:
-        kwargs["format"] = format
-    llm = ChatOllama(**kwargs)
-    response = llm.invoke([SystemMessage(content=system), HumanMessage(content=user)])
-    content = response.content
-    if isinstance(content, str):
-        return content.strip()
-    return str(content)
+    """One system+user turn on any provider (see tools/llm_providers.py)."""
+    llm = chat_model(model_name, temperature=temperature, json_mode=format == "json")
+    text = response_text(llm.invoke([SystemMessage(content=system), HumanMessage(content=user)]))
+    return extract_json(text) if format == "json" else text
 
 
 # ---------------------------------------------------------------------------
@@ -405,7 +401,7 @@ def agent1_data_summariser(state: PipelineState) -> PipelineState:
 
 def agent2_keyword_extractor(state: PipelineState) -> PipelineState:
     _notify(state, "🔑 Agent 2/5: Extracting literature search terms...")
-    fast_model = "llama3.2"
+    fast_model = fast_model_for(state["model"])
     anamnesis = state.get("anamnesis", "").strip()
 
     # Build user message — add anamnesis addendum when available
@@ -466,7 +462,7 @@ def agent3_literature_search(state: PipelineState) -> PipelineState:
             evidence_items=evidence_items,
             queries=state["search_queries"],
             summary=state.get("data_summary", ""),
-            fast_model="llama3.2",
+            fast_model=fast_model_for(state["model"]),
             fallback_model=state["model"],
         )
         if keep_pmids:
@@ -934,11 +930,7 @@ def continue_conversation(
     messages.append(HumanMessage(content=current_msg))
 
     try:
-        llm = ChatOllama(model=model, temperature=0.3)
-        response = llm.invoke(messages)
-        content = response.content
-        if isinstance(content, str):
-            return content.strip()
-        return str(content)
+        llm = chat_model(model, temperature=0.3)
+        return response_text(llm.invoke(messages))
     except Exception as e:
-        return f"Error during conversation: {e}\n\nPlease ensure Ollama is running and the model '{model}' is available."
+        return f"Error during conversation: {e}\n\nPlease check that the model '{model}' is available (Ollama running, or API key set)."

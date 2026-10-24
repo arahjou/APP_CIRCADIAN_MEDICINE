@@ -117,21 +117,23 @@ def analyze_recording(recording: Recording, *, record_id: str, description: str 
         calculate_single_person_cpd,
     )
     from tools.sleep_light_exposure import analyze_sleep_light_exposure
-    from tools.sleep_on_off_mid import analyze_sleep_periods
+    from tools.sleep_on_off_mid import analyze_sleep_periods, main_sleep_only
     from tools.sleep_SRI import calculate_sri_from_pimn
 
     eligible = quality["eligible"]
     periods = calculate("sleep_periods", "sleep", eligible["sleep"], lambda: analyze_sleep_periods(df))
-    if periods is not None and not periods.empty:
-        durations = periods["duration_minutes"]
+    # Naps and secondary episodes stay in sleep_periods but not in nightly summaries.
+    main_periods = main_sleep_only(periods)
+    if main_periods is not None and not main_periods.empty:
+        durations = main_periods["duration_minutes"]
         metrics["sleep_duration_summary"] = {
             "modality": "sleep", "status": "completed", "reason": None,
             "data": [{"statistic": key, "value": float(value), "unit": "minutes"}
                      for key, value in {"mean": durations.mean(), "minimum": durations.min(),
                                         "maximum": durations.max(), "SD (population)": durations.std(ddof=0)}.items()],
         }
-    calculate("cpd_mid_sleep", "sleep", periods is not None and not periods.empty,
-              lambda: calculate_single_person_cpd(build_centered_midpoint_hours(periods),
+    calculate("cpd_mid_sleep", "sleep", main_periods is not None and not main_periods.empty,
+              lambda: calculate_single_person_cpd(build_centered_midpoint_hours(main_periods),
                                                   date_col="mid_sleep_DATE", midpoint_col="midpoint_hours_centered"))
     calculate("sri_sleep", "sleep", eligible["sri"], lambda: calculate_sri_from_pimn(
         df, "DATE/TIME", "PIMn", sleep_state_col="SLEEP_STATE", local_tz=recording.metadata["timezone"]))

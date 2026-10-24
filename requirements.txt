@@ -11,6 +11,10 @@ ollama>=0.1.0
 langgraph>=0.2.0
 langchain-ollama>=0.1.0
 langchain-core>=0.2.0
+# Optional cloud providers (install only the ones you use)
+# langchain-anthropic>=0.3.0
+# langchain-openai>=0.3.0
+# langchain-google-genai>=2.0.0
 
 # Optional: For better performance
 pyarrow>=14.0.0

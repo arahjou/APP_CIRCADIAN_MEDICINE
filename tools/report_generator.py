@@ -84,7 +84,7 @@ def generate_comparison_report(ids):
         record_id = row['record_id']
         if record_id in ids:
             try:
-                sleep_periods = json.loads(row['results'])
+                sleep_periods = [p for p in json.loads(row['results']) if p.get('is_main_sleep', True)]
                 durations = [d for d in [calculate_sleep_duration(p) for p in sleep_periods] if d is not None]
                 if durations:
                     id_metrics = {

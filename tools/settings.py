@@ -12,6 +12,7 @@ class Settings:
     db_path: str
     ncbi_api_key: str | None
     allowed_models: List[str]
+    cloud_models: List[str]
     session_timeout_minutes: int
     max_login_attempts: int
     login_window_minutes: int
@@ -63,6 +64,13 @@ def get_settings() -> Settings:
         default=["phi4:14b"],
     )
 
+    # Cloud models are "provider/model" specs (see tools/llm_providers.py); a model
+    # is only offered in the app when its provider's API key is set.
+    cloud_models = _parse_csv(
+        os.getenv("CLOUD_MODELS", "anthropic/claude-sonnet-5-5,anthropic/claude-opus-5-5,openai/gpt-4.1,gemini/gemini-2.5-flash"),
+        default=[],
+    )
+
     session_timeout_minutes = int(os.getenv("SESSION_TIMEOUT_MINUTES", "30"))
     max_login_attempts = int(os.getenv("MAX_LOGIN_ATTEMPTS", "5"))
     login_window_minutes = int(os.getenv("LOGIN_WINDOW_MINUTES", "15"))
@@ -78,6 +86,7 @@ def get_settings() -> Settings:
         db_path=db_path,
         ncbi_api_key=os.getenv("NCBI_API_KEY") or None,
         allowed_models=allowed_models,
+        cloud_models=cloud_models,
         session_timeout_minutes=session_timeout_minutes,
         max_login_attempts=max_login_attempts,
         login_window_minutes=login_window_minutes,
