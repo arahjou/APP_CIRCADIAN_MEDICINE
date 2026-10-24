@@ -7,6 +7,7 @@ Primary access layer: tools/database.py (ActigraphDB)
 
 ```mermaid
 erDiagram
+    analysis_records ||--o{ recording_runs : records
     analysis_records ||--o{ sleep_analysis : has
     analysis_records ||--o{ activity_analysis : has
     analysis_records ||--o{ light_analysis : has
@@ -25,6 +26,14 @@ erDiagram
         TEXT file_name
         TEXT selected_dates
         TEXT anamnesis
+    }
+
+    recording_runs {
+        TEXT run_id PK
+        TEXT record_id FK
+        TEXT created_at
+        TEXT report_json
+        TEXT artifact_path
     }
 
     sleep_analysis {
@@ -130,9 +139,11 @@ ai_analysis_runs (composite key) -> (many) ai_agent_traces
 
 ## 3) Write Paths
 
-- app.py writes:
+- services/recording_service.py writes atomically:
   - analysis_records
-  - modality analysis tables via save_*_analysis
+  - successful modality results in existing tables
+  - recording_runs with full report/provenance and artifact path
+- app.py writes:
   - ai_analysis_runs and ai_agent_traces
   - audit entries
 - tools/report_generator.py reads modality tables and writes report JSON (file).
@@ -146,9 +157,10 @@ ai_analysis_runs (composite key) -> (many) ai_agent_traces
 
 ## 5) Artifacts Outside DB
 
-- circadian_report.json
-  - Created by tools/report_generator.save_json_report.
-  - Serves as AI pipeline input.
+- analysis_runs/<UUID>/{normalized.csv,report.json,report.html}
+  - Created by services/recording_service.py; input snapshot and numerical report.
+- analysis_runs/comparisons/<UUID>.json
+  - Created by tools/report_generator.save_json_report; optional AI pipeline input.
 - ai_analyses/*.txt and *.meta.json
   - Snapshot outputs created by app.py for user-level history.
 
@@ -161,4 +173,16 @@ To add a new modality table:
 3. Include table in allowed table list used by aggregation routines.
 4. Update report generator and docs to include modality in output contracts.
 
-Last verified against codebase state: 2026-04-04.
+## Numerical-run migration and retention
+
+`init_database()` adds `recording_runs` with `CREATE TABLE IF NOT EXISTS`; existing
+records and metric blobs are unchanged. `get_recording_run` returns None for old
+records. There is no fabricated backfill or automatic numerical recalculation.
+The application inserts each new run once and requires a new Analysis ID for reruns.
+
+SQLite writes for a numerical run are transactional. Artifact/DB crash consistency,
+backup and deletion behavior are documented in DATA_FLOW.md. The existing AI-run
+and agent-trace composite-key caches still use upserts; they are not immutable.
+Numerical-record ownership remains the legacy shared local-database model.
+
+Last verified against codebase state: 2026-10-24.

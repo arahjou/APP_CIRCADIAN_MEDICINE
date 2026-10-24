@@ -1,17 +1,24 @@
-import pandas as pd
-import sqlite3
 import json
 import os
+import sqlite3
 from datetime import datetime, timedelta
+
+import pandas as pd
+
 from tools.settings import get_settings
+
 
 def generate_comparison_report(ids):
     """
     Generates a comparison report for a list of record IDs.
     """
+    if len(ids) != 2 or len(set(ids)) != 2:
+        raise ValueError("Comparison requires exactly two distinct record IDs.")
     # 1) First, get the standard aggregated metrics
     from tools.database import ActigraphDB
-    db = ActigraphDB()
+    db = ActigraphDB(db_path=get_settings().db_path)
+    if any(not db.record_exists(record_id) for record_id in ids):
+        raise ValueError("Both comparison records must exist.")
     df_summary = db.get_aggregated_metrics_for_ids(
         record_ids=ids,
         include_tables=["sleep_analysis", "activity_analysis", "light_analysis"],
@@ -41,13 +48,13 @@ def generate_comparison_report(ids):
                             id_metrics[f"{metric}_total_minutes"] = sum(minutes_list)
                             id_metrics[f"{metric}_count_days"] = len(minutes_list)
                         else:
-                            id_metrics[f"{metric}_mean_minutes"] = 0
-                            id_metrics[f"{metric}_total_minutes"] = 0
+                            id_metrics[f"{metric}_mean_minutes"] = None
+                            id_metrics[f"{metric}_total_minutes"] = None
                             id_metrics[f"{metric}_count_days"] = 0
                     else:
-                        # values is a string message (no events found) — store as zero
-                        id_metrics[f"{metric}_mean_minutes"] = 0
-                        id_metrics[f"{metric}_total_minutes"] = 0
+                        # Missing/event-status text is not a measured zero.
+                        id_metrics[f"{metric}_mean_minutes"] = None
+                        id_metrics[f"{metric}_total_minutes"] = None
                         id_metrics[f"{metric}_count_days"] = 0
                 sleep_light_metrics.append(id_metrics)
             except (json.JSONDecodeError, KeyError):
@@ -61,6 +68,8 @@ def generate_comparison_report(ids):
 
     def calculate_sleep_duration(sleep_period):
         try:
+            if sleep_period.get('duration_minutes') is not None:
+                return float(sleep_period['duration_minutes'])
             onset_datetime = datetime.strptime(f"{sleep_period['Sleep_onset_DATE'][:10]} {sleep_period['Sleep_onset_Time']}", "%Y-%m-%d %H:%M:%S")
             offset_datetime = datetime.strptime(f"{sleep_period['Sleep_offset_DATE'][:10]} {sleep_period['Sleep_offset_TIME']}", "%Y-%m-%d %H:%M:%S")
             if offset_datetime < onset_datetime:
@@ -111,19 +120,49 @@ def generate_comparison_report(ids):
     if df_combined.empty:
         return "No data found for the specified IDs.", None, None
 
+    # Keep requested ordering; optional modalities remain explicitly unavailable.
+    df_combined = df_combined.set_index('id').reindex(ids).reset_index()
+    required = [
+        'sleep_analysis.cpd_mid_sleep.cpd_hours_mean',
+        'sleep_analysis.sri_sleep.SRI_mean',
+        'activity_analysis.activity_is_iv.IS_2day_mean',
+        'activity_analysis.activity_is_iv.IV_2day_mean',
+        'activity_analysis.activity_l5_m10_ra.M10_mean_mean',
+        'activity_analysis.activity_l5_m10_ra.L5_mean_mean',
+        'activity_analysis.activity_l5_m10_ra.RA_mean',
+        'activity_analysis.activity_cosinor.mesor_mean',
+        'activity_analysis.cpd_activity_acrophase.cpd_hours_mean',
+        'light_analysis.light_is_iv.IS_2day_mean',
+        'light_analysis.light_is_iv.IV_2day_mean',
+        'light_analysis.light_l5_m10_ra.M10_mean_mean',
+        'light_analysis.light_l5_m10_ra.L5_mean_mean',
+        'light_analysis.light_l5_m10_ra.RA_mean',
+        'light_analysis.light_cosinor.mesor_mean',
+        'light_analysis.cpd_light_acrophase.cpd_hours_mean',
+    ]
+    for col in required + ['sleep_duration_mean_minutes', 'sleep_duration_min_minutes', 'sleep_duration_std_minutes']:
+        if col not in df_combined:
+            df_combined[col] = float('nan')
+
     # 5) Create Tables
     # Ensure sleep_light_exposure metric columns exist (they may be absent if no light events were found)
     for col in ['metric1_mean_minutes', 'metric2_mean_minutes', 'metric3_mean_minutes']:
         if col not in df_combined.columns:
-            df_combined[col] = None
+            df_combined[col] = float('nan')
 
     # Table 1
-    table_1 = df_combined[['id', 'sleep_analysis.cpd_mid_sleep.cpd_hours_mean','sleep_analysis.sri_sleep.SRI_mean', 'sleep_duration_min_minutes']].copy()
-    table_1.rename(columns={'id': 'Period', 'sleep_analysis.cpd_mid_sleep.cpd_hours_mean': 'CPD1', 'sleep_analysis.sri_sleep.SRI_mean': 'SRI', 'sleep_duration_min_minutes': 'Duration'}, inplace=True)
+    table_1 = df_combined[['id', 'sleep_analysis.cpd_mid_sleep.cpd_hours_mean','sleep_analysis.sri_sleep.SRI_mean', 'sleep_duration_mean_minutes']].copy()
+    table_1.rename(columns={'id': 'Period', 'sleep_analysis.cpd_mid_sleep.cpd_hours_mean': 'CPD1', 'sleep_analysis.sri_sleep.SRI_mean': 'SRI', 'sleep_duration_mean_minutes': 'Duration'}, inplace=True)
     table_1 = table_1.round({'CPD1': 2, 'SRI': 2, 'Duration': 2})
-    table_new = pd.DataFrame({"Name": ["CPD mid sleep", "SRI", "Sleep Duration"], "Period1": [table_1.loc[0, "CPD1"], table_1.loc[0, "SRI"], table_1.loc[0, "Duration"]], "Period2": [table_1.loc[1, "CPD1"], table_1.loc[1, "SRI"], table_1.loc[1, "Duration"]]})
+    table_new = pd.DataFrame({"Name": ["CPD mid sleep", "SRI", "Mean sleep duration (minutes)"], "Period1": [table_1.loc[0, "CPD1"], table_1.loc[0, "SRI"], table_1.loc[0, "Duration"]], "Period2": [table_1.loc[1, "CPD1"], table_1.loc[1, "SRI"], table_1.loc[1, "Duration"]]})
     table_new["Difference"] = table_new["Period2"] - table_new["Period1"]
-    table_1 = table_new.copy()
+    duration_details = pd.DataFrame({
+        "Name": ["Minimum sleep duration (minutes)", "Sleep duration SD (minutes)"],
+        "Period1": [df_combined.loc[0, "sleep_duration_min_minutes"], df_combined.loc[0, "sleep_duration_std_minutes"]],
+        "Period2": [df_combined.loc[1, "sleep_duration_min_minutes"], df_combined.loc[1, "sleep_duration_std_minutes"]],
+    })
+    duration_details["Difference"] = duration_details["Period2"] - duration_details["Period1"]
+    table_1 = pd.concat([table_new, duration_details], ignore_index=True)
 
     # Table 2
     table_2 = df_combined[['id', 'metric1_mean_minutes','metric2_mean_minutes', 'metric3_mean_minutes']].copy()
@@ -258,18 +297,25 @@ def generate_comparison_report(ids):
     return html_report, df_combined, json_data
 
 
-def save_json_report(json_data, filename="circadian_report.json"):
+def save_json_report(json_data, filename=None):
     """
     Saves the JSON report data to a file.
     
     Args:
         json_data: Dictionary containing the report data
-        filename: Name of the file to save (default: circadian_report.json)
+        filename: Optional new path; default is a unique analysis_runs/comparisons JSON.
     
     Returns:
         str: Full path to the saved JSON file
     """
-    filepath = os.path.join(os.getcwd(), filename)
-    with open(filepath, "w") as f:
-        json.dump(json_data, f, indent=4)
+    from pathlib import Path
+    from uuid import uuid4
+    if filename is None:
+        directory = Path(os.getcwd()) / "analysis_runs" / "comparisons"
+        directory.mkdir(parents=True, exist_ok=True)
+        filename = str(directory / f"{uuid4().hex}.json")
+    filepath = os.path.abspath(filename)
+    with open(filepath, "x") as f:
+        from tools.run_report import json_safe
+        json.dump(json_safe(json_data), f, indent=4, allow_nan=False)
     return filepath

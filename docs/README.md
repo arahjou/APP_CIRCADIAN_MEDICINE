@@ -4,6 +4,10 @@ This folder provides developer-facing architecture and implementation documentat
 
 ## Documents
 
+- [DATA_FLOW.md](DATA_FLOW.md) — new recording-to-report contract and end-to-end data flow
+- [IMPLEMENTATION_NOTES.md](IMPLEMENTATION_NOTES.md) — delivered changes, validation and boundaries
+- [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) — scope and acceptance criteria
+
 - [ARCHITECTURE.md](ARCHITECTURE.md)
   - System topology, component responsibilities, communication pathways
   - End-to-end runtime flow from upload to final outputs
@@ -37,4 +41,4 @@ When adding or modifying runtime behavior, update:
 - [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) if persistence changed
 - [EXTENSIBILITY_GUIDE.md](EXTENSIBILITY_GUIDE.md) if new integration touchpoints were introduced
 
-Last verified against codebase state: 2026-04-04.
+Last verified against codebase state: 2026-10-24.

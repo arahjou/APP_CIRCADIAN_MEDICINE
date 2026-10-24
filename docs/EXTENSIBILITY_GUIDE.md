@@ -1,114 +1,52 @@
-# Extensibility Guide
+# Extending CMAS
 
-This guide explains exactly where and how to add a new modality (example: skin temperature) end-to-end.
+Updated 2026-10-24. The numerical service is the integration point.
 
-## 1) Integration Blueprint
+## A new device
 
-```mermaid
-flowchart LR
-    A[New raw column in CSV] --> B[tools/upload_file.py parse + normalize]
-    B --> C[app.py preprocessing + date filtering]
-    C --> D[tools/<modality>_*.py metric computation]
-    D --> E[tools/database.py new table + save/get methods]
-    E --> F[tools/report_generator.py include in comparison JSON]
-    F --> G[services/report_service.py pass-through]
-    G --> H[app.py render + AI input availability]
-    H --> I[tools/llm_conversation.py prompt/state updates if needed]
-```
+1. Obtain a real export specification and verify timestamp semantics, timezone,
+   epoch length, signal definitions, units and calibration.
+2. Implement an adapter returning `Recording(data, metadata)`, or use the normalized
+   CSV contract in DATA_FLOW.md with an explicit column mapping.
+3. Preserve source bytes hash, device/firmware label, mapping and conversion version.
+4. Do not rename acceleration/ENMO to PIMn, or photopic lux to melanopic EDI, without
+   a validated transformation. Unconverted signals can remain additional columns.
+5. Add fixtures for actual headers and synthetic boundary cases, including optional
+   channels, corrupt timestamps, missing values, duplicate records and DST.
+6. Demonstrate the same supported metric calculations through UI and batch entry points.
 
-ASCII view:
+ActiHub can initially export the documented CSV contract. Hardware-specific BLE,
+firmware parsing, calibration and measurement equivalence remain separate work.
 
-```text
-CSV column -> ingestion normalization -> tab1 computation block
-          -> DB persistence -> comparison/report JSON -> AI summary context
-          -> UI visualization and outputs
-```
+## A new metric or modality
 
-## 2) Example: Add Skin Temperature Modality
+1. Add the standard signal and units to `tools/recording.py` if needed.
+2. Define eligibility in `services/analysis_service.py`: valid coverage, sampling,
+   missingness and time assumptions must be explicit.
+3. Implement a pure calculator in `tools/`; document units and edge cases.
+4. Register orchestration and outcomes in `services/recording_service.py`. Preserve
+   `completed/unavailable/skipped/failed` distinctions.
+5. Add reproducibility parameters and regression tests against independently known
+   examples. Verify that missing inputs produce no fabricated numerical result.
+6. Existing HTML renders generic result tables. Add meaningful labels/units and
+   plots where needed. Update comparison schemas deliberately if exposing the
+   metric to the AI pipeline.
+7. If a new modality needs a legacy SQLite table, update schema, safe table lists,
+   the persistence whitelist and historical readers. A run report can retain new
+   structured results without forcing a premature wide database schema.
 
-### Step A: Ingestion contract
-- Update tools/upload_file.py:
-  - Ensure temperature source column is parsed and normalized.
-  - Add consistent output column name, for example SKIN_TEMP.
-- Validate in services/analysis_service.py if modality should be required.
+## Temperature and phasor experiments
 
-### Step B: Analysis modules
-- Create new modules under tools/:
-  - tools/temperature_plotter.py
-  - tools/temperature_IS_IV.py
-  - tools/temperature_L5_M10_RA.py
-  - tools/temperature_cosinor.py
-  - tools/temperature_CPD.py
-- Follow activity/light signatures so orchestration stays uniform.
+Temperature is imported and summarized, but experimental temperature/phasor rhythm
+metrics are not promoted to the main engine. Before doing so, replace fixed sample
+count assumptions with explicit cadence/coverage rules, handle low-amplitude
+undefined phase, validate circular summaries, and test DST and missing channels.
 
-### Step C: App orchestration
-- Update app.py:
-  - Import new temperature modules.
-  - Run calculations in tab1 analysis flow.
-  - Save outputs using DB methods.
-  - Add visualizations in analysis output section.
+## LLM experiments
 
-### Step D: Persistence
-- Update tools/database.py:
-  - Create table, for example temperature_analysis(record_id, analysis_type, results).
-  - Add save_temperature_analysis(...) and retrieval/aggregation support.
-  - Extend allowed table list for aggregation APIs.
-
-### Step E: Comparison report and JSON
-- Update tools/report_generator.py:
-  - Include temperature metrics in table generation.
-  - Add temperature section to JSON payload used by AI pipeline.
-- services/report_service.py remains pass-through unless contract shape changes.
-
-### Step F: AI pipeline integration
-- Update tools/llm_conversation.py if needed:
-  - Ensure compact report flattening includes new section fields.
-  - Update prompts if domain-specific interpretation is desired.
-
-### Step G: Tests
-- Add unit tests for each new metric file.
-- Add integration test verifying report generation includes temperature section.
-- Add pipeline test for new metric terms appearing in AI summary context.
-
-## 3) Mandatory File Checklist
-
-For a new modality, verify edits across this checklist:
-
-- tools/upload_file.py
-- services/analysis_service.py (if required-column policy changes)
-- app.py
-- tools/<new_modality>_*.py files
-- tools/database.py
-- tools/report_generator.py
-- docs/ARCHITECTURE.md
-- docs/TOOLS_AND_SERVICES_API.md
-- docs/DATABASE_SCHEMA.md
-- docs/PYTHON_FILE_MAP.md
-- tests/unit/* new modality tests
-- tests/integration/* end-to-end coverage
-
-## 4) Output Routing Rules
-
-- Metric-level outputs:
-  - Persist as JSON in modality analysis table.
-- Comparison-level outputs:
-  - Must appear in report_generator JSON under a stable section name.
-- AI-level outputs:
-  - Must be present in compact_report input to Agent 1 if downstream narrative should include modality.
-
-## 5) Design Rules for New Modality Modules
-
-- Keep signatures parallel to existing activity/light modules.
-- Return stable column names for aggregation compatibility.
-- Do not hardcode file paths; use settings or app context.
-- Preserve timezone-aware timestamp handling from ingestion path.
-- Emit clinically interpretable units in report fields where possible.
-
-## 6) Quick Validation Workflow
-
-1. Run one new analysis from UI and confirm DB rows written for new modality.
-2. Run compare flow and confirm JSON report includes new modality section.
-3. Run AI analysis and confirm summary references new modality metrics.
-4. Run automated tests including new unit/integration tests.
-
-Last verified against codebase state: 2026-04-04.
+Keep Development variants available for comparison. Use fixed approved cases with
+known numerical changes and reviewed evidence. Evaluate numerical fidelity,
+retrieval relevance, claim-to-paper support, missing-evidence behavior, readability
+and runtime. PMID membership checks alone are not claim validation. A percentage
+change threshold is a tunable heuristic unless independently justified. Choose a
+pipeline from benchmark results before replacing the current mainline graph.

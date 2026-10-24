@@ -39,6 +39,16 @@ class ActigraphDB:
                 )
             ''')
             
+            # Numerical runs are append-only; legacy metric tables remain readable.
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS recording_runs (
+                    run_id TEXT PRIMARY KEY,
+                    record_id TEXT NOT NULL REFERENCES analysis_records(id),
+                    created_at TEXT NOT NULL,
+                    report_json TEXT NOT NULL,
+                    artifact_path TEXT NOT NULL
+                )
+            ''')
             # Sleep analysis results
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS sleep_analysis (
@@ -688,6 +698,15 @@ class ActigraphDB:
             print(f"Error saving {analysis_type} analysis: {e}")
             return False
     
+    def get_recording_run(self, record_id: str) -> dict | None:
+        """Fetch the reproducibility report for a new numerical analysis."""
+        with sqlite3.connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT report_json FROM recording_runs WHERE record_id = ? ORDER BY created_at DESC LIMIT 1",
+                (record_id,),
+            ).fetchone()
+        return json.loads(row[0]) if row else None
+
     def get_all_records(self) -> List[Dict]:
         """Get all analysis records"""
         try:
@@ -745,6 +764,7 @@ class ActigraphDB:
                 cursor = conn.cursor()
                 
                 # Delete from all tables
+                cursor.execute("DELETE FROM recording_runs WHERE record_id = ?", (record_id,))
                 cursor.execute("DELETE FROM sleep_analysis WHERE record_id = ?", (record_id,))
                 cursor.execute("DELETE FROM activity_analysis WHERE record_id = ?", (record_id,))
                 cursor.execute("DELETE FROM light_analysis WHERE record_id = ?", (record_id,))

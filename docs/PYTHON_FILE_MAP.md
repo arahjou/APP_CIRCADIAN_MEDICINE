@@ -2,6 +2,23 @@
 
 This inventory covers all Python files in the repository and documents purpose, primary inputs/outputs, and interactions.
 
+## Numerical-workflow additions (2026-10-24)
+
+| File | Responsibility |
+|---|---|
+| tools/recording.py | Recording/ImportOptions contract, CSV import and source fingerprint |
+| tools/analysis_view.py | Streamlit import, review, service invocation and downloads |
+| tools/run_report.py | Strict JSON conversion and standalone HTML with daily plots |
+| services/recording_service.py | Numerical pipeline, strict sleep inference, artifacts and transactional persistence |
+| scripts/analyze_recording.py | Batch entry point using the same service |
+| tests/unit/test_recording.py | Import, quality, calendar/DST and SRI regressions |
+| tests/integration/test_recording_workflow.py | Numerical pipeline, artifacts, rollback, comparison, CLI and Streamlit checks |
+
+`app.py` now delegates new numerical analysis to `tools/analysis_view.py`.
+`services/analysis_service.py` provides full quality/eligibility assessment.
+`tools/upload_file.py` remains a compatibility wrapper. Comparison files now use
+unique paths under `analysis_runs/comparisons/`; see DATA_FLOW.md.
+
 ## Root
 
 | File | Purpose | Main Inputs | Main Outputs | Interacts With |

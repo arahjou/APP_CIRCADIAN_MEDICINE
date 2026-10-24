@@ -527,7 +527,8 @@ def make_segment_export(seg_df: pd.DataFrame) -> pd.DataFrame:
 # -----------------------------
 # Embedded editor — public API
 # -----------------------------
-def run_sleep_editor(df: pd.DataFrame, source_key: str = "uploaded", show_export: bool = True) -> pd.DataFrame:
+def run_sleep_editor(df: pd.DataFrame, source_key: str = "uploaded", show_export: bool = True,
+                     allow_auto_detection: bool = True) -> pd.DataFrame:
     """Render the sleep-segment editor inline within another Streamlit page.
 
     Initialises session state on the first call or when *source_key* changes
@@ -643,7 +644,7 @@ def run_sleep_editor(df: pd.DataFrame, source_key: str = "uploaded", show_export
     metrics[3].metric("Edited rows", int(st.session_state.df["EDITED"].sum()))
     metrics[4].metric("Undo available", len(st.session_state.undo_stack))
 
-    if seg_df.empty and int(st.session_state.df["SLEEP_STATE"].sum()) == 0:
+    if allow_auto_detection and seg_df.empty and int(st.session_state.df["SLEEP_STATE"].sum()) == 0:
         st.warning("No sleep bouts detected yet.")
         if st.button("Auto-detect sleep bouts using Roenneberg", key="vis_autodetect_btn"):
             push_undo_state("autodetect_sleep_bouts")

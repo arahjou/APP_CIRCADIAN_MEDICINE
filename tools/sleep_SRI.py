@@ -1,5 +1,6 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
+
 
 def calculate_sri_from_pimn(
     df: pd.DataFrame,
@@ -23,6 +24,8 @@ def calculate_sri_from_pimn(
     """
     if window_days < 2:
         raise ValueError("window_days must be at least 2.")
+    if slide_interval < 1:
+        raise ValueError("slide_interval must be positive.")
 
     df = df.copy()
 
@@ -37,17 +40,30 @@ def calculate_sri_from_pimn(
     else:
         ts = ts.dt.tz_localize(local_tz)
 
+    transition_dates = set()
+    for day in ts.dt.date.unique():
+        start = pd.Timestamp(day).tz_localize(local_tz)
+        end = (pd.Timestamp(day) + pd.Timedelta(days=1)).tz_localize(local_tz)
+        if end - start != pd.Timedelta(hours=24):
+            transition_dates.add(day)
     # Drop timezone but keep local wall clock
     ts = ts.dt.tz_localize(None)
     df[timestamp_col] = ts
 
     # Chronological order before rolling
     df = df.sort_values(timestamp_col)
+    if df[timestamp_col].duplicated().any():
+        dup = df[timestamp_col].duplicated(keep=False)
+        if (~df.loc[dup, timestamp_col].dt.date.isin(transition_dates)).any():
+            raise ValueError("Duplicate timestamps are not valid SRI input.")
+    if df.empty:
+        return pd.DataFrame(columns=["start_date", "end_date", "SRI", "valid_epochs_pct"])
 
     # --- Sleep state source ---
     selected_sleep_state_col = sleep_state_col if sleep_state_col else ("SLEEP_STATE" if "SLEEP_STATE" in df.columns else None)
     if selected_sleep_state_col and selected_sleep_state_col in df.columns:
-        df["Sleep_State"] = pd.to_numeric(df[selected_sleep_state_col], errors="coerce").clip(0, 1).astype("float")
+        state = pd.to_numeric(df[selected_sleep_state_col], errors="coerce")
+        df["Sleep_State"] = state.where(state.isin([0, 1])).astype("float")
     else:
         df["PIMn_avg"] = df[pimn_col].rolling(window=rolling_window).mean()  # NaN until full window
         sleep_state = (df["PIMn_avg"] < sleep_threshold).astype("float")
@@ -58,10 +74,18 @@ def calculate_sri_from_pimn(
     df["date"] = df[timestamp_col].dt.date
     df["time"] = df[timestamp_col].dt.time  # keeps seconds (e.g., :39) consistent day-to-day
 
-    pvt = (
-        df.pivot(index="date", columns="time", values="Sleep_State")
-          .sort_index(ascending=False)  # newest day first
-    )
+    first_date, last_date = df["date"].min(), df["date"].max()
+    df = df[~df["date"].isin(transition_dates)]
+    # Full calendar/clock grids prevent comparing nonconsecutive days and keep
+    # absent epochs in the coverage denominator. DST transition days are excluded.
+    seconds = ts.dt.second.unique()
+    if len(seconds) != 1 or (ts.dt.microsecond != 0).any():
+        raise ValueError("SRI requires a consistent one-minute clock grid.")
+    clock = pd.date_range(pd.Timestamp("2000-01-01") + pd.Timedelta(seconds=int(seconds[0])),
+                          periods=1440, freq="min").time
+    dates_grid = pd.date_range(first_date, last_date, freq="D").date
+    pvt = df.pivot(index="date", columns="time", values="Sleep_State").reindex(
+        index=dates_grid, columns=clock).sort_index(ascending=False)
 
     dates = pvt.index
     n_dates = len(dates)

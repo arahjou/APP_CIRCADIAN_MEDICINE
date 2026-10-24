@@ -213,6 +213,7 @@ Actigraph_record.db
 *.sqlite3
 
 # Generated reports
+analysis_runs/
 circadian_report.json
 enhanced_circadian_report.html
 llm_analysis.txt

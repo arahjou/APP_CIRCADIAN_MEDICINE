@@ -76,7 +76,8 @@ def analyze_sleep_periods(data):
                 'Sleep_offset_DATE': offset_time.date(),
                 'Sleep_offset_TIME': offset_time.time(),
                 'mid_sleep_DATE': mid_sleep_time.date(),
-                'Mid_sleep_Time': mid_sleep_time.time()
+                'Mid_sleep_Time': mid_sleep_time.time(),
+                'duration_minutes': sleep_duration.total_seconds() / 60
             }
             sleep_periods.append(period_data)
 

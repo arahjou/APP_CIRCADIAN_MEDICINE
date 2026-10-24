@@ -11,6 +11,14 @@ Alternate implementation:
 Related deep-dive:
 - Agent6.md (Agent 6 specific behavior)
 
+## Current input path (2026-10-24)
+
+The app passes the unique path returned by comparison persistence under
+`analysis_runs/comparisons/<UUID>.json`. The historical `circadian_report.json`
+references below describe the payload, not a required shared filename. Numerical
+single-record reports are separate and do not invoke this pipeline. Experimental
+Development graphs have not replaced the mainline graph.
+
 ## 1) Pipeline Overview
 
 ```mermaid

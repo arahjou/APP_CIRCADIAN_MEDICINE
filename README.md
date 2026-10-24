@@ -9,9 +9,10 @@ A privacy-preserving, AI-augmented web application for clinical circadian rhythm
 **Circadian Medicine Analysis Suite** is a [Streamlit](https://streamlit.io)-based research tool that provides an end-to-end workflow for:
 
 1. Uploading and managing multi-day wrist actigraphy recordings
-2. Computing a comprehensive set of validated circadian, sleep, and light-exposure metrics
+2. Computing circadian, sleep, and light-exposure research metrics
 3. Comparing recordings across multiple time periods (e.g., before/after intervention)
-4. Generating structured clinical reports via a 5- or 6-agent AI pipeline that runs **entirely locally** — no patient data ever leaves the machine
+4. Exporting reproducible single-record HTML/JSON reports without an LLM
+5. Optionally generating audience-specific interpretations through local Ollama models and external PubMed keyword retrieval
 
 It was developed as a personal project.
 
@@ -28,7 +29,9 @@ It was developed as a personal project.
 Developer-oriented architecture and integration documentation is available in `docs/`:
 
 - `docs/README.md` — index of all technical documents
-- `docs/ARCHITECTURE.md` — system structure and end-to-end data flow
+- `docs/ARCHITECTURE.md` — system structure
+- `docs/DATA_FLOW.md` — recording contract, processing rules, artifacts and limitations
+- `docs/IMPLEMENTATION_NOTES.md` — changes, validation results and remaining pilot work
 - `docs/PYTHON_FILE_MAP.md` — purpose/inputs/outputs for all Python files
 - `docs/TOOLS_AND_SERVICES_API.md` — orchestration interface contracts
 - `docs/AGENT_PIPELINE.md` — multi-agent pipeline behavior and routing
@@ -86,7 +89,7 @@ Agent 5 – Report Writer          (Ollama LLM, audience-aware)
 Structured clinical report (expert / doctor / layperson)
 ```
 
-**Privacy guarantee:** only keyword search queries reach the internet. All raw metrics, identifiers, patient data, and anamnesis remain on the local machine.
+**Data boundary:** numerical analysis and Ollama inference run locally. PubMed receives generated query text. Anamnesis-derived queries need separate deidentification review; local inference alone does not guarantee that generated queries contain no sensitive details.
 
 ### Other Features
 
@@ -160,25 +163,38 @@ The GitHub Actions workflow in `.github/workflows/ci.yml` runs these checks auto
 
 ## Input Data Format
 
-The application expects one or more CSV files with the following columns:
+CSV requires `DATE/TIME` (or `Timestamp`) and at least one supported signal:
+`PIMn`, `MELANOPIC EDI`, `TEMPERATURE`, `SLEEP_STATE`, photopic light, TATn or ZCMn.
+Signals are individually optional. Missing signals disable only dependent analyses.
+`SLEEP/WAKE` is accepted as an alias for `SLEEP_STATE` (0=wake, 1=sleep).
 
-| Column | Required | Description |
-|--------|----------|-------------|
-| `DATE/TIME` | ✓ | Timestamp: `MM/DD/YYYY HH:MM:SS` |
-| `PIMn` | ✓ | Proportional Integrating Measure (activity count) |
-| `MELANOPIC EDI` | ✓ | Melanopic Equivalent Daylight Illuminance (lux) |
-| `WHITE LIGHT (LUX)` | ✓ | Photopic illuminance (lux) |
-| `SLEEP/WAKE` | ✓ | Binary sleep state (0 = wake, 1 = sleep) |
+Choose the local timezone and date order explicitly in Import settings. Offset-bearing
+ISO timestamps are supported. Ambiguous/nonexistent local DST times and duplicate
+timestamps must be resolved before analysis. Column mappings are supported, but do
+not imply calibration or conversion between different devices' activity measures.
 
-Sample data files are provided in the `data/` directory.
+See [the full data contract and flow](docs/DATA_FLOW.md) for units, quality policies,
+compatibility details and the proposed ActiHub CSV integration boundary.
+
+### Batch analysis
+
+```bash
+python scripts/analyze_recording.py recording.csv \
+  --record-id P001-week1 --timezone Europe/Berlin --date-order dayfirst \
+  --device research-device --out analysis_runs --db pilot.db
+```
+
+Omit `--db` to produce artifacts only. The CLI uses supplied sleep labels; it does
+not infer sleep implicitly. One-minute data is required by legacy rhythm metrics;
+other cadences still receive descriptive signal summaries.
 
 ---
 
 ## Usage Workflow
 
-1. **New Analysis** tab — Upload a CSV file, enter a participant ID and description, select a date range, and run the full metric battery.
-2. **Previous Analyses** tab — Browse, review, and export stored analyses.
-3. **Compare Records** tab — Select two or more record IDs to generate a side-by-side comparison report (JSON).
+1. **New Analysis** tab — Import a CSV with explicit source/time settings, review quality, optionally infer/review sleep from PIM, select dates, and run eligible metrics. Download the single-record HTML/JSON report. Each run retains a reviewed-input snapshot and provenance.
+2. **Previous Analyses** tab — Browse stored analyses and download new-style reproducibility reports. Historical records remain readable without fabricated provenance.
+3. **Compare Records** tab — Select two distinct record IDs to generate a side-by-side comparison report (JSON).
 4. **AI Analysis** tab — Select two record IDs, choose a target audience (expert / doctor / layperson) and Ollama model, then run the pipeline to generate a literature-grounded clinical report. For Doctor and Expert audiences, optionally enter a patient anamnesis — this activates Agent 6, which maps each reported symptom to the most relevant metric change and supporting PubMed evidence, and flags symptoms with no literature match.
 
 ---
@@ -242,7 +258,10 @@ python scripts/evaluate_pubmed_retrieval.py
 app.py                  # Main Streamlit application
 requirements.txt        # Python dependencies
 tools/
-    upload_file.py          # File ingestion and date filtering
+    recording.py            # Normalized recording and explicit CSV adapters
+    upload_file.py          # Compatibility ingestion/date-filter helpers
+    analysis_view.py        # New recording workflow UI
+    run_report.py           # Single-record HTML and strict JSON
     database.py             # SQLite ORM (ActigraphDB)
     # Sleep
     sleep_on_off_mid.py         # Sleep onset / offset / mid-sleep detection

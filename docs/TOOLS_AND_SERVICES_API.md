@@ -1,142 +1,82 @@
-# Tools and Services API Contracts
+# Tools and services API
 
-This document captures orchestration-facing interfaces used by the Streamlit application and supporting scripts.
+Updated 2026-10-24. Python 3.10+.
 
-## 1) Services Layer
+## Import
 
-### services/analysis_service.py
-- Function: data_quality_report(df: pandas.DataFrame) -> dict
-- Required columns: DATE/TIME, PIMn, MELANOPIC EDI
-- Output keys:
-  - ok: bool
-  - missing_columns: list[str]
-  - date_coverage_days: int
-  - sampling_minutes_median: float | None
-  - timezone_present: bool
+```python
+from tools.recording import ImportOptions, import_recording
 
-### services/report_service.py
-- Function: build_comparison(ids: list[str]) -> tuple[str, Any, dict | None]
-  - Delegates to tools/report_generator.generate_comparison_report.
-  - Returns HTML report, combined dataframe, JSON report payload.
-- Function: persist_report_json(json_data: dict) -> str
-  - Delegates to tools/report_generator.save_json_report.
-  - Returns absolute path to saved JSON.
+with open("recording.csv", "rb") as source:
+    recording = import_recording(source, ImportOptions(
+        timezone="Europe/Berlin", date_order="dayfirst", device="research-device",
+        column_map={"Time": "DATE/TIME"},
+    ))
+```
 
-### services/ai_pipeline_service.py
-- Function: run_ai_pipeline(...)
-- Signature:
-  - json_filepath: str
-  - model: str
-  - audience: str
-  - anamnesis: str
-  - progress_callback: Callable[[str], None] | None
-- Returns: tuple[str, dict]
-  - run_id: short UUID fragment
-  - results: pipeline payload from tools/llm_conversation.get_intermediate_results
+Returns `Recording(data: DataFrame, metadata: dict)`. See DATA_FLOW.md for signal
+semantics. Import raises actionable errors for invalid structure/times. Invalid
+signal values are counted and replaced by missing values. `upload_file(...)`
+remains a compatibility wrapper returning the dataframe, with metadata in
+`data.attrs['recording']`.
 
-## 2) Ingestion and Preprocessing
+## Quality and numerical analysis
 
-### tools/upload_file.py
-- upload_file(upload_file) -> pandas.DataFrame | None
-  - Detects header row and delimiter
-  - Parses DATE/TIME and localizes to Europe/Berlin
-  - Returns normalized subset columns and derived DATE/TIME/HOUR/Transition fields
-- get_available_dates(df) -> list[str]
-- filter_data_by_dates(df, selected_dates) -> pandas.DataFrame
+```python
+from services.analysis_service import data_quality_report
+from services.recording_service import analyze_recording, persist_recording_run
 
-### tools/sleep_editor.py (selected public app-facing APIs)
-- run_sleep_editor(df, source_key="uploaded", show_export=True) -> pandas.DataFrame
-- infer_sleep_state_roenneberg(...) -> pandas.Series
-- infer_sleep_state_from_pimn(...) -> pandas.Series (deprecated compatibility wrapper)
-- prepare_dataframe(df) -> pandas.DataFrame
+quality = data_quality_report(recording.data)
+result = analyze_recording(recording, record_id="P001-week1",
+                           description="Baseline research recording",
+                           selected_dates=None,
+                           parameters={"minimum_day_coverage": 0.7})
+directory = persist_recording_run(result, output_dir="analysis_runs")
+```
 
-## 3) Metric Engines
+Quality returns `ok`, `errors`, `warnings`, `signals`, `eligible`, date coverage,
+sampling interval, timezone presence, invalid/duplicate timestamps, gaps and DST.
 
-### Sleep modules
-- tools/sleep_light_exposure.py
-  - analyze_sleep_light_exposure(df_subset) -> dict
-  - Includes metric1/metric2/metric3 structures for light around sleep.
-- tools/sleep_on_off_mid.py
-  - analyze_sleep_periods(data) -> pandas.DataFrame
-  - Sleep onset/offset/midpoint per detected period.
-- tools/sleep_CPD_ms.py
-  - build_centered_midpoint_hours(df, ...) -> pandas.DataFrame
-  - calculate_single_person_cpd(df, date_col, midpoint_col) -> pandas.DataFrame
-- tools/sleep_SRI.py
-  - calculate_sri_from_pimn(...) -> pandas.DataFrame
+Analysis returns `{report: dict, snapshot: bytes}`. `report` is strict-JSON-ready
+and has schema `analysis-run-1`. It contains metadata, parameters, software hashes,
+metrics, daily summaries and quality. It makes no filesystem or DB writes.
 
-### Activity modules
-- tools/activity_IS_IV.py
-  - compute_rolling_2day_is_iv_activity(df, time_col='DATE/TIME', value_col='PIMn', ...) -> pandas.DataFrame
-- tools/activity_L5_M10_RA.py
-  - compute_daily_L5_M10_RA_activity(df, time_col='DATE/TIME', value_col='PIMn', ...) -> pandas.DataFrame
-- tools/activity_cosinor.py
-  - fit_cosinor_daily_activity(df, datetime_col='DATE/TIME', value_col='PIMn') -> pandas.DataFrame
-- tools/activity_CPD.py
-  - calculate_cpd_activity(df, ms_col='acrophase_hours', date_col='date', ...) -> pandas.DataFrame
-- tools/activity_plotter.py
-  - activity_plotter(df_subset) -> matplotlib.figure.Figure
+`infer_sleep_labels(data)` is optional and returns a Series aligned to the input
+index. It requires continuous valid one-minute PIM counts and does no imputation.
+Callers must retain its settings/method in analysis parameters when using it.
 
-### Light modules
-- tools/light_IS_IV.py
-  - compute_rolling_2day_is_iv_light(df, time_col='DATE/TIME', value_col='MELANOPIC EDI', ...) -> pandas.DataFrame
-- tools/light_L5_M10_RA.py
-  - compute_daily_L5_M10_RA_light(df, time_col='DATE/TIME', value_col='MELANOPIC EDI', ...) -> pandas.DataFrame
-- tools/light_cosinor.py
-  - fit_cosinor_daily_activity(df, datetime_col='DATE/TIME', value_col='MELANOPIC EDI') -> pandas.DataFrame
-- tools/light_CPD.py
-  - calculate_cpd_light(df, ms_col='acrophase_hours', date_col='date', ...) -> pandas.DataFrame
-- tools/light_plotter.py
-  - light_plotter(df_subset) -> matplotlib.figure.Figure
+`persist_recording_run(result, output_dir=..., db=ActigraphDB(...))` additionally
+inserts the record, successful metrics, and complete run into the existing database.
+It raises on persistence failure and never overwrites a run or existing record ID.
 
-## 4) Reporting and Persistence
+## Rendering and historical access
 
-### tools/report_generator.py
-- generate_comparison_report(ids) -> tuple[str, pandas.DataFrame, dict]
-  - Reads aggregated metrics from DB
-  - Builds domain tables
-  - Produces HTML report and LLM-ready JSON structure
-- save_json_report(json_data, filename='circadian_report.json') -> str
+- `tools.run_report.render_run_report(report) -> str`: standalone escaped HTML.
+- `ActigraphDB.get_recording_run(record_id) -> dict | None`: new-style stored report;
+  returns `None` for historical records without provenance.
+- `tools.analysis_view.report_downloads(report, key=...)`: Streamlit HTML/JSON buttons.
 
-### tools/database.py (ActigraphDB)
-- Core record APIs:
-  - save_analysis_record(...)
-  - save_sleep_analysis(...)
-  - save_activity_analysis(...)
-  - save_light_analysis(...)
-  - get_all_records(), get_record_by_id(), record_exists(...)
-- Aggregation APIs:
-  - get_aggregated_metrics_for_ids(...)
-- AI run APIs:
-  - save_ai_analysis_run(...)
-  - get_ai_analysis_run(...)
-  - get_ai_analysis_runs_for_user(...)
-- Auth and audit APIs:
-  - create_or_update_user(...)
-  - verify_user_password(...)
-  - record_login_attempt(...), is_locked_out(...)
-  - add_audit_log(...)
+## Comparison and optional AI
 
-## 5) AI and Retrieval
+- `services.report_service.build_comparison(ids)` requires **two distinct existing**
+  IDs and returns `(html, combined_dataframe, json_data)` in requested order.
+- `persist_report_json(json_data)` returns a unique comparison path.
+- `tools.report_generator.save_json_report(json_data, filename=None)` uses a unique
+  default path; an explicit path must not exist already.
+- `services.ai_pipeline_service.run_ai_pipeline(json_filepath=..., model=...,
+  audience=..., anamnesis=..., progress_callback=...)` returns `(run_id, results)`.
+  Its existing interface is unchanged. Pass the path returned by comparison
+  persistence rather than assuming `circadian_report.json`.
 
-### tools/llm_conversation.py
-- analyze_circadian_report(json_filepath, model='phi4:14b', audience='expert') -> str
-- get_intermediate_results(json_filepath, model='phi4:14b', audience='expert', anamnesis='', progress_callback=None) -> dict
-- continue_conversation(previous_analysis, user_question, model='phi4:14b') -> str
-- save_analysis(analysis_text, filename='llm_analysis.txt') -> str
+## Batch use
 
-### tools/pubmed_search.py
-- search_pubmed(queries, ncbi_api_key=None, config=None) -> list[dict]
-  - Structured output records include pmid/title/abstract/journal/year/score/query_source/compiled_query.
-- evidence_to_text(evidence_items, max_chars=12000) -> str
-- RetrievalConfig dataclass controls breadth and filtering.
+```bash
+python scripts/analyze_recording.py recording.csv \
+  --record-id P001-week1 --timezone Europe/Berlin --date-order dayfirst \
+  --device research-device --out analysis_runs --db pilot.db
+```
 
-### tools/settings.py
-- get_settings() -> Settings dataclass
-  - Parses APP_ENV, DB_PATH, NCBI_API_KEY, ALLOWED_MODELS, auth/session controls.
-
-### tools/app_logging.py
-- log_event(event, **kwargs) -> None
-  - Redacts basic identifiers and emits structured JSON log line.
-
-Last verified against codebase state: 2026-04-04.
+Omit `--db` for artifacts only. `--column-map` accepts a JSON object;
+`--dates 2026-01-01 2026-01-02` selects local dates. The CLI never implicitly infers
+sleep and does not run an LLM. Exit 0 = completed/summary-only, 2 = partial metric
+failure with saved report, 1 = import/analysis/persistence error.
